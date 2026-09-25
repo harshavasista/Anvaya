@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Anvaya generated evidence and test data
+data/
+results/
+
+# Anvaya generated reconstruction files
+*.bin
