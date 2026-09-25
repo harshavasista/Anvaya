@@ -6,11 +6,16 @@
     <title>ANVAYA | Digital Forensics &amp; Data Recovery</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
+
     <a class="skip-link" href="#overview">Skip to case overview</a>
+
+    <!-- HEADER -->
     <header class="topbar">
         <div class="brand-wrap">
             <div class="brand-mark" aria-label="ANVAYA logo"></div>
+
             <div class="brand-copy">
                 <h1>ANVAYA</h1>
                 <p>Digital Forensics &amp; Data Recovery Platform</p>
@@ -23,6 +28,8 @@
         </div>
     </header>
 
+
+    <!-- NAVIGATION -->
     <nav class="section-nav" aria-label="Case sections">
         <a class="active" href="#overview">Overview</a>
         <a href="#classification">Classification</a>
@@ -33,276 +40,653 @@
         <a href="#audit">Audit</a>
     </nav>
 
+
     <main class="page-shell">
+
+        <!-- =========================================================
+             EVIDENCE UPLOAD
+        ========================================================== -->
+
+        <section class="panel upload-panel" id="upload">
+
+            <div class="section-header">
+                <div>
+                    <p class="eyebrow">Evidence Intake</p>
+                    <h3>Analyze Digital Evidence</h3>
+                </div>
+            </div>
+
+            <p class="upload-description">
+                Upload an evidence file to run Anvaya's forensic analysis,
+                integrity assessment, fragment reconstruction and audit process.
+            </p>
+
+            <div class="upload-controls">
+
+                <label class="file-input-label" for="evidenceFile">
+                    Choose Evidence File
+                </label>
+
+                <input
+                    type="file"
+                    id="evidenceFile"
+                    accept=".pdf,.jpg,.jpeg,.png,.txt,.docx,.xlsx,.zip,.sqlite,.db"
+                >
+
+                <span id="selectedFileName" class="selected-file">
+                    No file selected
+                </span>
+
+                <button
+                    type="button"
+                    id="analyzeEvidenceBtn"
+                    class="primary-btn"
+                >
+                    Analyze Evidence
+                </button>
+
+            </div>
+
+            <div
+                id="uploadStatus"
+                class="upload-status"
+                role="status"
+                aria-live="polite"
+            >
+                Select an evidence file to begin.
+            </div>
+
+        </section>
+
+
+        <!-- =========================================================
+             OVERVIEW
+        ========================================================== -->
+
         <section class="hero panel" id="overview">
+
             <div>
                 <p class="eyebrow">Investigation Dashboard</p>
                 <h2>Evidence Reconstruction Overview</h2>
             </div>
-            <div class="status-pill" id="modeIndicator" data-mode="loading" aria-live="polite">
+
+            <div
+                class="status-pill"
+                id="modeIndicator"
+                data-mode="loading"
+                aria-live="polite"
+            >
                 <span class="status-dot live"></span>
-                <span id="modeLabel">CONNECTING TO FORENSIC ENGINE...</span>
+                <span id="modeLabel">
+                    CONNECTING TO FORENSIC ENGINE...
+                </span>
             </div>
+
         </section>
 
-        <p class="connection-note" id="connectionNote" role="status" aria-live="polite">Loading evidence...</p>
+
+        <p
+            class="connection-note"
+            id="connectionNote"
+            role="status"
+            aria-live="polite"
+        >
+            Loading evidence...
+        </p>
+
+
+        <!-- =========================================================
+             CASE STATISTICS
+        ========================================================== -->
 
         <section class="stats-grid" aria-label="Case statistics">
+
             <article class="stat-card panel">
                 <span>Evidence Files</span>
                 <strong id="fileCount">0</strong>
             </article>
+
             <article class="stat-card panel">
                 <span>Recoverable Rate</span>
                 <strong id="recoveredCount">0%</strong>
             </article>
+
             <article class="stat-card panel">
                 <span>AI Confidence</span>
                 <strong id="confidence">0%</strong>
             </article>
+
             <article class="stat-card panel">
                 <span>Fragments Mapped</span>
                 <strong id="fragmentCount">0</strong>
             </article>
+
         </section>
 
-        <section class="panel classification-panel" id="classification">
+
+        <!-- =========================================================
+             CLASSIFICATION
+        ========================================================== -->
+
+        <section
+            class="panel classification-panel"
+            id="classification"
+        >
+
             <div class="section-header">
                 <h3>Evidence Classification</h3>
             </div>
+
             <div class="status-grid">
+
                 <article class="status-card recovered">
                     <div class="dot"></div>
+
                     <div>
                         <h4>Recovered</h4>
-                        <p>Physically available data or validated reconstruction supported by surviving bytes and hash continuity.</p>
+
+                        <p>
+                            Physically available data or validated reconstruction
+                            supported by surviving bytes and hash continuity.
+                        </p>
                     </div>
                 </article>
+
 
                 <article class="status-card inferred">
                     <div class="dot"></div>
+
                     <div>
                         <h4>AI Inference</h4>
-                        <p>Probable structural relationships inferred from surviving evidence, not confirmed recovered bytes.</p>
+
+                        <p>
+                            Probable structural relationships inferred from
+                            surviving evidence, not confirmed recovered bytes.
+                        </p>
                     </div>
                 </article>
+
 
                 <article class="status-card missing">
                     <div class="dot"></div>
+
                     <div>
                         <h4>Missing / Unknown</h4>
-                        <p>Insufficient or corrupted evidence remains; recovery cannot be asserted with forensic confidence.</p>
+
+                        <p>
+                            Insufficient or corrupted evidence remains;
+                            recovery cannot be asserted with forensic confidence.
+                        </p>
                     </div>
                 </article>
+
             </div>
+
         </section>
 
+
+        <!-- =========================================================
+             ARTIFACTS
+        ========================================================== -->
+
         <section class="panel artifact-panel" id="artifacts">
+
             <div class="section-header">
                 <h3>Priority Recovered Artifacts</h3>
             </div>
 
             <div class="artifact-table" aria-live="polite">
+
                 <div class="table-header">
                     <span>Artifact</span>
                     <span>Type</span>
                     <span>Recovery</span>
                     <span>State</span>
                 </div>
+
                 <div id="artifactTableBody"></div>
+
             </div>
+
         </section>
 
+
+        <!-- =========================================================
+             FRAGMENT GRAPH
+        ========================================================== -->
+
         <section class="panel fragment-panel" id="fragments">
+
             <div class="section-header">
                 <h3>Fragment Relationship Analysis</h3>
             </div>
 
             <div class="fragment-layout">
+
                 <div class="graph-shell">
-                    <svg id="fragmentGraph" viewBox="0 0 700 310" role="img" aria-label="Fragment relationship graph"></svg>
+
+                    <svg
+                        id="fragmentGraph"
+                        viewBox="0 0 700 310"
+                        role="img"
+                        aria-label="Fragment relationship graph"
+                    ></svg>
+
                 </div>
 
-                <aside class="fragment-detail panel-inset" aria-live="polite">
+
+                <aside
+                    class="fragment-detail panel-inset"
+                    aria-live="polite"
+                >
+
                     <p class="eyebrow">Fragment Details</p>
+
                     <h4 id="fragmentIdLabel">F007</h4>
 
+
                     <dl class="detail-list">
+
                         <div>
                             <dt>Artifact</dt>
-                            <dd id="fragmentArtifact">report.pdf</dd>
+                            <dd id="fragmentArtifact">
+                                report.pdf
+                            </dd>
                         </div>
+
                         <div>
                             <dt>Fragment Type</dt>
-                            <dd id="fragmentType">Object Stream</dd>
+                            <dd id="fragmentType">
+                                Object Stream
+                            </dd>
                         </div>
+
                         <div>
                             <dt>Compatibility Score</dt>
-                            <dd id="fragmentCompat">0.94</dd>
+                            <dd id="fragmentCompat">
+                                0.94
+                            </dd>
                         </div>
+
                         <div>
                             <dt>Evidence State</dt>
-                            <dd id="fragmentState">Recovered</dd>
+                            <dd id="fragmentState">
+                                Recovered
+                            </dd>
                         </div>
+
                         <div>
                             <dt>Hash Status</dt>
-                            <dd id="fragmentHash">Verified</dd>
+                            <dd id="fragmentHash">
+                                Verified
+                            </dd>
                         </div>
+
                     </dl>
 
+
                     <div class="reason-box">
+
                         <span>AI Matching Reason</span>
-                        <p id="fragmentReasoning">Loading reasoning...</p>
+
+                        <p id="fragmentReasoning">
+                            Loading reasoning...
+                        </p>
+
                     </div>
+
                 </aside>
+
             </div>
+
         </section>
 
-        <section class="panel recovery-panel" id="recovery">
+
+        <!-- =========================================================
+             RECOVERY
+        ========================================================== -->
+
+        <section
+            class="panel recovery-panel"
+            id="recovery"
+        >
+
             <div class="section-header">
                 <h3>Recovery &amp; Corruption Analysis</h3>
             </div>
 
+
             <div class="recovery-overview">
+
                 <div class="metric-group">
+
                     <div class="metric-label">
                         <span>Recovered</span>
                         <strong id="recoveredMetric">84%</strong>
                     </div>
-                    <div class="mini-bar"><div class="fill recovered-fill" id="recoveredMetricBar"></div></div>
+
+                    <div class="mini-bar">
+                        <div
+                            class="fill recovered-fill"
+                            id="recoveredMetricBar"
+                        ></div>
+                    </div>
+
                 </div>
 
+
                 <div class="metric-group">
+
                     <div class="metric-label">
                         <span>AI Inference</span>
                         <strong id="inferredMetric">11%</strong>
                     </div>
-                    <div class="mini-bar"><div class="fill inferred-fill" id="inferredMetricBar"></div></div>
+
+                    <div class="mini-bar">
+                        <div
+                            class="fill inferred-fill"
+                            id="inferredMetricBar"
+                        ></div>
+                    </div>
+
                 </div>
 
+
                 <div class="metric-group">
+
                     <div class="metric-label">
                         <span>Missing / Unknown</span>
                         <strong id="missingMetric">5%</strong>
                     </div>
-                    <div class="mini-bar"><div class="fill missing-fill" id="missingMetricBar"></div></div>
+
+                    <div class="mini-bar">
+                        <div
+                            class="fill missing-fill"
+                            id="missingMetricBar"
+                        ></div>
+                    </div>
+
                 </div>
+
             </div>
+
         </section>
 
-        <section class="panel timeline-panel" id="timeline">
+
+        <!-- =========================================================
+             TIMELINE
+        ========================================================== -->
+
+        <section
+            class="panel timeline-panel"
+            id="timeline"
+        >
+
             <div class="section-header">
+
                 <h3>Evidence Timeline</h3>
-                <span class="demo-note" id="dataSourceNote">Mock / demo data</span>
+
+                <span
+                    class="demo-note"
+                    id="dataSourceNote"
+                >
+                    Mock / demo data
+                </span>
+
             </div>
-            <div id="timelineList" class="timeline-list" aria-live="polite"></div>
+
+            <div
+                id="timelineList"
+                class="timeline-list"
+                aria-live="polite"
+            ></div>
+
         </section>
 
-        <section class="panel audit-panel" id="audit">
+
+        <!-- =========================================================
+             AUDIT
+        ========================================================== -->
+
+        <section
+            class="panel audit-panel"
+            id="audit"
+        >
+
             <div class="section-header">
+
                 <h3>Evidence Audit</h3>
-                <button id="exportReportBtn" class="export-btn" type="button">Export Evidence Report</button>
+
+                <button
+                    id="exportReportBtn"
+                    class="export-btn"
+                    type="button"
+                >
+                    Export Evidence Report
+                </button>
+
             </div>
+
 
             <div class="audit-grid">
+
                 <div class="audit-block">
                     <span>Case ID</span>
-                    <strong id="auditCaseId">CASE-2026-001</strong>
+                    <strong id="auditCaseId">
+                        CASE-2026-001
+                    </strong>
                 </div>
+
                 <div class="audit-block">
                     <span>Evidence ID</span>
-                    <strong id="auditEvidenceId">EVC-18-421</strong>
+                    <strong id="auditEvidenceId">
+                        EVC-18-421
+                    </strong>
                 </div>
+
                 <div class="audit-block">
                     <span>SHA-256</span>
-                    <strong id="auditHash">a9d3…f4b8</strong>
+                    <strong id="auditHash">
+                        a9d3…f4b8
+                    </strong>
                 </div>
+
                 <div class="audit-block">
                     <span>Input Timestamp</span>
-                    <strong id="auditInputTime">2026-09-21 09:42 UTC</strong>
+                    <strong id="auditInputTime">
+                        2026-09-21 09:42 UTC
+                    </strong>
                 </div>
+
                 <div class="audit-block">
                     <span>Processing Timestamp</span>
-                    <strong id="auditProcessTime">2026-09-22 14:11 UTC</strong>
+                    <strong id="auditProcessTime">
+                        2026-09-22 14:11 UTC
+                    </strong>
                 </div>
+
                 <div class="audit-block">
                     <span>Operation Count</span>
                     <strong id="auditOps">14</strong>
                 </div>
+
                 <div class="audit-block">
                     <span>Original Evidence Hash</span>
-                    <strong id="auditOriginalHash">66fb…9bb1</strong>
+                    <strong id="auditOriginalHash">
+                        66fb…9bb1
+                    </strong>
                 </div>
+
                 <div class="audit-block">
                     <span>Recovered Artifact Hash</span>
-                    <strong id="auditRecoveredHash">4a1c…c80e</strong>
+                    <strong id="auditRecoveredHash">
+                        4a1c…c80e
+                    </strong>
                 </div>
+
                 <div class="audit-block">
                     <span>Provenance Status</span>
-                    <strong id="auditProvenance">Chain preserved</strong>
+                    <strong id="auditProvenance">
+                        Chain preserved
+                    </strong>
                 </div>
+
             </div>
+
         </section>
+
     </main>
 
-    <div class="modal-overlay" id="artifactModal" aria-hidden="true">
-        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="artifactModalTitle">
+
+    <!-- =============================================================
+         ARTIFACT MODAL
+    ============================================================= -->
+
+    <div
+        class="modal-overlay"
+        id="artifactModal"
+        aria-hidden="true"
+    >
+
+        <div
+            class="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="artifactModalTitle"
+        >
+
             <div class="modal-header">
+
                 <div>
                     <p class="eyebrow">Artifact Analysis</p>
-                    <h3 id="artifactModalTitle">artifact.ext</h3>
+                    <h3 id="artifactModalTitle">
+                        artifact.ext
+                    </h3>
                 </div>
-                <button type="button" class="modal-close" id="closeArtifactModal" aria-label="Close">×</button>
+
+                <button
+                    type="button"
+                    class="modal-close"
+                    id="closeArtifactModal"
+                    aria-label="Close"
+                >
+                    ×
+                </button>
+
             </div>
 
+
             <div class="modal-grid">
+
                 <div class="modal-stack">
+
                     <div class="meta-row">
                         <span>File Type</span>
-                        <strong id="modalArtifactType">PDF</strong>
+                        <strong id="modalArtifactType">
+                            PDF
+                        </strong>
                     </div>
+
                     <div class="meta-row">
                         <span>Recovery</span>
-                        <strong id="modalArtifactRecovery">82%</strong>
+                        <strong id="modalArtifactRecovery">
+                            82%
+                        </strong>
                     </div>
+
                     <div class="meta-row">
                         <span>Evidence State</span>
-                        <strong id="modalArtifactState">partial</strong>
+                        <strong id="modalArtifactState">
+                            partial
+                        </strong>
                     </div>
+
                 </div>
 
+
                 <div class="metric-stack">
+
                     <div class="metric-header">
                         <span>Structural Integrity</span>
-                        <strong id="modalIntegrityValue">82%</strong>
+                        <strong id="modalIntegrityValue">
+                            82%
+                        </strong>
                     </div>
-                    <div class="progress-track"><div id="modalIntegrityBar" class="progress-fill green-fill"></div></div>
+
+                    <div class="progress-track">
+                        <div
+                            id="modalIntegrityBar"
+                            class="progress-fill green-fill"
+                        ></div>
+                    </div>
+
 
                     <div class="metric-header">
                         <span>Missing / Corrupted</span>
-                        <strong id="modalCorruptionValue">18%</strong>
+                        <strong id="modalCorruptionValue">
+                            18%
+                        </strong>
                     </div>
-                    <div class="progress-track"><div id="modalCorruptionBar" class="progress-fill red-fill"></div></div>
+
+                    <div class="progress-track">
+                        <div
+                            id="modalCorruptionBar"
+                            class="progress-fill red-fill"
+                        ></div>
+                    </div>
+
                 </div>
+
             </div>
+
 
             <div class="explainability-box">
+
                 <h4>AI Explanation</h4>
-                <p id="modalAiExplanation">Loading analysis...</p>
+
+                <p id="modalAiExplanation">
+                    Loading analysis...
+                </p>
+
             </div>
+
 
             <div class="explainability-box subtle-box">
+
                 <h4>Explainability Factors</h4>
-                <ul id="explainabilityList" class="bullet-list"></ul>
+
+                <ul
+                    id="explainabilityList"
+                    class="bullet-list"
+                ></ul>
+
             </div>
+
 
             <div class="modal-actions">
-                <button type="button" class="secondary-btn">View Raw Hex</button>
-                <button type="button" class="primary-btn">Export Artifact</button>
+
+                <button
+                    type="button"
+                    class="secondary-btn"
+                >
+                    View Raw Hex
+                </button>
+
+                <button
+                    type="button"
+                    class="primary-btn"
+                >
+                    Export Artifact
+                </button>
+
             </div>
+
         </div>
+
     </div>
 
+
     <script src="app.js"></script>
+
 </body>
 </html>
