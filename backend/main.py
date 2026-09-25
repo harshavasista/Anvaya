@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 import hashlib
 import os
 import shutil
@@ -41,6 +42,26 @@ app = FastAPI(
 )
 
 
+# --------------------------------------------------
+# CORS CONFIGURATION
+# --------------------------------------------------
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# --------------------------------------------------
+# FILE TYPE IDENTIFICATION
+# --------------------------------------------------
+
 def identify_file_type(data: bytes):
 
     if data.startswith(b"%PDF"):
@@ -65,6 +86,10 @@ def identify_file_type(data: bytes):
     except UnicodeDecodeError:
         return "Unknown"
 
+
+# --------------------------------------------------
+# AI ANOMALY ANALYSIS
+# --------------------------------------------------
 
 def run_anomaly_analysis(fragment_dir):
 
@@ -135,6 +160,10 @@ def summarize_anomalies(anomaly_results):
     }
 
 
+# --------------------------------------------------
+# CORRUPTION ANALYSIS
+# --------------------------------------------------
+
 def run_corruption_analysis(
     source_file,
     fragment_dir
@@ -165,6 +194,10 @@ def run_corruption_analysis(
         "damaged_fragments": damaged_fragments
     }
 
+
+# --------------------------------------------------
+# FINAL RECONSTRUCTION MAP
+# --------------------------------------------------
 
 def build_final_reconstruction_map(
     original_fragments,
@@ -203,7 +236,9 @@ def build_final_reconstruction_map(
             filename = corruption["filename"]
 
             item["status"] = "CORRUPTED"
+
             item["filename"] = filename
+
             item["changed_bytes"] = (
                 corruption["changed_bytes"]
             )
@@ -217,7 +252,9 @@ def build_final_reconstruction_map(
         elif corruption["status"] == "MISSING":
 
             item["status"] = "MISSING"
+
             item["filename"] = None
+
             item["sha256"] = None
 
     reconstruction_map.sort(
@@ -226,6 +263,10 @@ def build_final_reconstruction_map(
 
     return reconstruction_map
 
+
+# --------------------------------------------------
+# HOME
+# --------------------------------------------------
 
 @app.get("/")
 def home():
@@ -236,6 +277,10 @@ def home():
         "message": "Digital Evidence Recovery System"
     }
 
+
+# --------------------------------------------------
+# UPLOAD ENDPOINT
+# --------------------------------------------------
 
 @app.post("/api/upload")
 async def upload_file(
@@ -273,6 +318,10 @@ async def upload_file(
         "status": "evidence_ingested"
     }
 
+
+# --------------------------------------------------
+# BASIC ANALYSIS ENDPOINT
+# --------------------------------------------------
 
 @app.post("/api/analyze")
 async def analyze_file(
@@ -336,6 +385,10 @@ async def analyze_file(
     }
 
 
+# --------------------------------------------------
+# INTEGRITY ENDPOINT
+# --------------------------------------------------
+
 @app.get("/api/integrity")
 def integrity_analysis():
 
@@ -365,6 +418,10 @@ def integrity_analysis():
     }
 
 
+# --------------------------------------------------
+# ANOMALY ENDPOINT
+# --------------------------------------------------
+
 @app.get("/api/anomaly")
 def anomaly_analysis():
 
@@ -393,6 +450,10 @@ def anomaly_analysis():
         "fragments": anomaly_results
     }
 
+
+# --------------------------------------------------
+# COMPLETE CASE ANALYSIS
+# --------------------------------------------------
 
 @app.post("/api/case/analyze")
 async def complete_case_analysis(
@@ -457,6 +518,7 @@ async def complete_case_analysis(
 
     created_at = datetime.now().isoformat()
 
+
     # --------------------------------------------------
     # AUDIT TRAIL
     # --------------------------------------------------
@@ -498,6 +560,11 @@ async def complete_case_analysis(
         )
     )
 
+
+    # --------------------------------------------------
+    # ANALYSIS VARIABLES
+    # --------------------------------------------------
+
     fragment_dir = "data/fragments"
 
     integrity_report = None
@@ -509,6 +576,11 @@ async def complete_case_analysis(
     reconstruction_report = None
     reconstruction_map = []
     reconstruction_candidate = None
+
+
+    # --------------------------------------------------
+    # PROCESS FRAGMENTS
+    # --------------------------------------------------
 
     if os.path.exists(
         fragment_dir
@@ -534,6 +606,7 @@ async def complete_case_analysis(
                 metadata=integrity_report
             )
         )
+
 
         # ----------------------------------------------
         # CORRUPTION
@@ -568,6 +641,7 @@ async def complete_case_analysis(
             )
         )
 
+
         # ----------------------------------------------
         # AI ANALYSIS
         # ----------------------------------------------
@@ -587,6 +661,7 @@ async def complete_case_analysis(
                 metadata=anomaly_summary
             )
         )
+
 
         # ----------------------------------------------
         # RECONSTRUCTION
@@ -621,12 +696,14 @@ async def complete_case_analysis(
             candidate_path
         )
 
-        candidate_hash = hashlib.sha256(
-            open(
-                candidate_path,
-                "rb"
-            ).read()
-        ).hexdigest()
+        with open(
+            candidate_path,
+            "rb"
+        ) as candidate_file:
+
+            candidate_hash = hashlib.sha256(
+                candidate_file.read()
+            ).hexdigest()
 
         reconstruction_candidate = {
             "filename": candidate_filename,
@@ -662,6 +739,7 @@ async def complete_case_analysis(
             )
         )
 
+
     # --------------------------------------------------
     # SAVE AUDIT LOG
     # --------------------------------------------------
@@ -670,6 +748,11 @@ async def complete_case_analysis(
         case_id,
         audit_events
     )
+
+
+    # --------------------------------------------------
+    # FINAL RESPONSE
+    # --------------------------------------------------
 
     return {
 
