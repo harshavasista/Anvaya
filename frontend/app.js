@@ -1,16 +1,10 @@
 const API_CONFIG = {
     baseUrl: "http://127.0.0.1:8000/api",
-    timeout: 10000,
+    timeout: 120000,
     endpoints: {
-        case: "/case",
-        artifacts: "/artifacts",
-        fragments: "/fragments",
-        timeline: "/timeline",
-        audit: "/audit"
+        analyze: "/case/analyze"
     }
 };
-
-// Member 1 should allow the Live Server origin in FastAPI CORS settings.
 
 const state = {
     mode: "demo",
@@ -21,667 +15,2369 @@ const state = {
     timeline: [],
     audit: null,
     selectedFragment: null,
-    selectedArtifact: null
+    selectedArtifact: null,
+    rawResponse: null
 };
 
 let apiRequestFailed = false;
+
+
+/* =========================================================
+   DEMO DATA
+========================================================= */
 
 const MOCK_DATA = {
     caseInfo: {
         id: "CASE-2026-001",
         evidenceId: "EVC-18-421",
-        sha256: "a9d3c1ae6f3d0b4a93d4ba3586f61e9a5d0e9b827a5d3273b09f0af1c9d7ee93",
+        sha256:
+            "a9d3c1ae6f3d0b4a93d4ba3586f61e9a5d0e9b827a5d3273b09f0af1c9d7ee93",
         inputTimestamp: "2026-09-21 09:42 UTC",
         processingTimestamp: "2026-09-22 14:11 UTC",
-        operationCount: 14,
-        originalHash: "66fb4a6df0cb9ce9855020d4f5c9d456a8d6bf5a8a3db1763f6780aefaf7d8b9",
-        recoveredArtifactHash: "4a1c9ab1c0ef85ea4be0b8e1f49cb1dbd2db94cb1c2710a7d198e8022c8d3431",
-        provenanceStatus: "Chain preserved"
+        operationCount: 7,
+        originalHash:
+            "66fb4a6df0cb9ce9855020d4f5c9d456a8d6bf5a8a3db1763f6780aefaf7d8b9",
+        recoveredArtifactHash:
+            "4a1c9ab1c0ef85ea4be0b8e1f49cb1dbd2db94cb1c2710a7d198e8022c8d3431",
+        provenanceStatus: "Tamper-evident audit recorded"
     },
+
     stats: {
-        fileCount: 1402,
-        recovered: 84,
-        confidence: 91,
-        totalFragments: 8593,
-        inferred: 11,
+        fileCount: 1,
+        recovered: 91,
+        confidence: 0,
+        totalFragments: 79,
+        inferred: 0,
         missing: 5
     },
+
     artifacts: [
         {
-            name: "report.pdf",
+            name: "Evidence File",
             type: "PDF",
-            recovery: 82,
-            integrity: 82,
-            corruption: 18,
+            recovery: 91,
+            integrity: 91,
+            corruption: 9,
             state: "partial",
-            explanation: "The Anvaya system identified a probable continuation of the document structure from surviving header blocks and page metadata. The recovered body is supported by file-signature alignment and object-stream continuity, but not all content is fully validated.",
+            explanation:
+                "The evidence file was divided into fragments and analyzed for integrity, corruption and reconstruction.",
             explainability: [
-                "Structural compatibility: Object stream markers match expected PDF boundaries.",
-                "Byte-pattern continuity: Surviving bytes align with surrounding segments.",
-                "File-signature compatibility: Header and trailer signatures remain consistent.",
-                "Metadata consistency: Document revision fields are coherent with recovered fragments.",
-                "Human review recommendation: Validate page-order reconstruction before legal use."
-            ]
-        },
-        {
-            name: "suspect_photo.jpg",
-            type: "JPEG",
-            recovery: 94,
-            integrity: 94,
-            corruption: 6,
-            state: "recovered",
-            explanation: "The image container remains structurally coherent with verified EXIF markers and a stable file signature. The recovered region is supported by contiguous data blocks and hash continuity, with only minor corruption at trailing segments.",
-            explainability: [
-                "Structural compatibility: EXIF segments and frame markers remain intact.",
-                "Byte-pattern continuity: No major discontinuities were detected across the payload.",
-                "File-signature compatibility: JPEG markers match expected encoding structure.",
-                "Metadata consistency: Camera metadata remains internally consistent.",
-                "Hash verification: Image hash chain is intact for the validated region."
-            ]
-        },
-        {
-            name: "sys_auth.log",
-            type: "TXT",
-            recovery: 61,
-            integrity: 61,
-            corruption: 39,
-            state: "partial",
-            explanation: "The log stream shows partial continuity but includes multiple corrupted sectors. Anvaya infers probable event ordering from adjacent records and timestamp patterns, while preserving the distinction that missing records remain unverified.",
-            explainability: [
-                "Structural compatibility: Event delimiters are partially preserved.",
-                "Byte-pattern continuity: Some sequence gaps align with known timestamp formats.",
-                "File-signature compatibility: Plain-text records remain consistent in delimiters and key-value structure.",
-                "Metadata consistency: Time ordering is coherent across recovered entries.",
-                "Anomaly indicators: Several records are incomplete or overwritten and require human review."
+                "SHA-256 hash calculated during evidence ingestion.",
+                "Fragments were compared against the original fragment sequence.",
+                "Missing and corrupted regions were identified.",
+                "A reconstruction candidate was generated where surviving evidence was available."
             ]
         }
     ],
+
     fragments: [
-        { id: "F001", artifact: "report.pdf", type: "Header Block", state: "recovered", compatibility: 0.98, hashStatus: "Verified", reasoning: "Fragment F001 provides the document signature and page-structure baseline used to anchor reconstruction. The relationship to adjacent fragments is supported by stable header markers and file-boundary continuity.", connections: ["F004"], x: 90, y: 150 },
-        { id: "F004", artifact: "report.pdf", type: "Document Map", state: "recovered", compatibility: 0.94, hashStatus: "Verified", reasoning: "Fragment F004 follows F001 with compatible structural markers and expected object-stream boundaries. The connection is supported by byte-pattern continuity and page-index alignment.", connections: ["F007"], x: 200, y: 130 },
-        { id: "F007", artifact: "report.pdf", type: "Object Stream", state: "recovered", compatibility: 0.94, hashStatus: "Verified", reasoning: "Fragment F007 follows F004 with compatible structural markers and expected object-stream boundaries. The connection is supported by byte-pattern continuity and file-structure compatibility.", connections: ["F009", "F004"], x: 330, y: 170 },
-        { id: "F009", artifact: "report.pdf", type: "Embedded Object", state: "inferred", compatibility: 0.81, hashStatus: "Pending", reasoning: "Fragment F009 shows a strong probable match to recovered content, but the region is partially reconstructed and still requires analyst review because its exact byte sequence cannot be fully confirmed.", connections: ["F013", "F007"], x: 500, y: 140 },
-        { id: "F011", artifact: "sys_auth.log", type: "Log Block", state: "missing", compatibility: 0.26, hashStatus: "Corrupted", reasoning: "Fragment F011 is missing or heavily overwritten. The system indicates a low-confidence relationship only because surrounding metadata is partially preserved and does not establish reliable continuity.", connections: [], x: 430, y: 250 },
-        { id: "F013", artifact: "report.pdf", type: "Trailer Segment", state: "recovered", compatibility: 0.9, hashStatus: "Verified", reasoning: "Fragment F013 closes the sequence with coherent trailer metadata and stable structural markers. The relationship is consistent with the reconstructed document chain but is not assumed to be the only valid path.", connections: ["F009"], x: 620, y: 160 }
+        {
+            id: "F001",
+            artifact: "Evidence File",
+            type: "Recovered Fragment",
+            state: "recovered",
+            compatibility: 1,
+            hashStatus: "Verified",
+            reasoning: "Fragment matched the original evidence fragment by SHA-256.",
+            connections: [],
+            x: 90,
+            y: 150
+        }
     ],
+
     timeline: [
-        { time: "09:42", operation: "Evidence ingestion", status: "success", explanation: "Source media was catalogued and reserved for forensic processing." },
-        { time: "09:49", operation: "SHA-256 calculated", status: "success", explanation: "Original evidence hash generated and stored as a reference baseline." },
-        { time: "10:03", operation: "Fragment detection", status: "success", explanation: "Recovered fragments were enumerated and classified by file-signature pattern." },
-        { time: "10:18", operation: "Duplicate detection", status: "warning", explanation: "Redundant copies were flagged and reviewed for hash divergence." },
-        { time: "10:44", operation: "Fragment matching", status: "success", explanation: "Compatible structural chains were identified between adjacent surviving blocks." },
-        { time: "11:12", operation: "Reconstruction attempt", status: "warning", explanation: "Partial reconstruction was attempted only where evidence continuity remained valid." },
-        { time: "12:06", operation: "AI analysis", status: "success", explanation: "Anvaya inferred probable relationships while preserving the distinction between evidence and hypothesis." },
-        { time: "12:30", operation: "Integrity verification", status: "muted", explanation: "Recovered structure and provenance chain reviewed for final audit readiness." }
+        {
+            time: "--:--",
+            operation: "Evidence analysis",
+            status: "success",
+            explanation: "Demo evidence analysis."
+        }
     ]
 };
 
-function mockCaseResponse() {
-    return {
-        case_id: MOCK_DATA.caseInfo.id,
-        stats: {
-            file_count: MOCK_DATA.stats.fileCount,
-            recovery_percentage: MOCK_DATA.stats.recovered,
-            ai_confidence: MOCK_DATA.stats.confidence,
-            fragment_count: MOCK_DATA.stats.totalFragments
-        },
-        ...MOCK_DATA.caseInfo
-    };
-}
 
-function mockAuditResponse() {
-    return {
-        case_id: MOCK_DATA.caseInfo.id,
-        evidence_id: MOCK_DATA.caseInfo.evidenceId,
-        sha256: MOCK_DATA.caseInfo.sha256,
-        input_timestamp: MOCK_DATA.caseInfo.inputTimestamp,
-        processing_timestamp: MOCK_DATA.caseInfo.processingTimestamp,
-        operation_count: MOCK_DATA.caseInfo.operationCount,
-        original_evidence_hash: MOCK_DATA.caseInfo.originalHash,
-        recovered_artifact_hash: MOCK_DATA.caseInfo.recoveredArtifactHash,
-        provenance_status: MOCK_DATA.caseInfo.provenanceStatus
-    };
-}
+/* =========================================================
+   HELPERS
+========================================================= */
 
 function endpointUrl(endpoint) {
     return `${API_CONFIG.baseUrl}${endpoint}`;
 }
 
-async function fetchJson(endpoint) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.timeout);
+function shortenHash(hash) {
+    if (!hash) return "—";
+
+    if (hash.length <= 18) {
+        return hash;
+    }
+
+    return `${hash.slice(0, 10)}…${hash.slice(-6)}`;
+}
+
+function formatTimestamp(timestamp) {
+    if (!timestamp) return "—";
 
     try {
-        const response = await fetch(endpointUrl(endpoint), {
-            method: "GET",
-            headers: { Accept: "application/json" },
-            signal: controller.signal
-        });
+        const date = new Date(timestamp);
+
+        if (Number.isNaN(date.getTime())) {
+            return timestamp;
+        }
+
+        return date.toLocaleString();
+    } catch {
+        return timestamp;
+    }
+}
+
+function percentage(value) {
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return 0;
+    }
+
+    return Math.max(0, Math.min(100, number));
+}
+
+
+/* =========================================================
+   BACKEND REQUEST
+========================================================= */
+
+async function analyzeEvidenceFile(file) {
+
+    const controller = new AbortController();
+
+    const timeoutId = setTimeout(
+        () => controller.abort(),
+        API_CONFIG.timeout
+    );
+
+    try {
+
+        const formData = new FormData();
+
+        formData.append("file", file);
+
+        const response = await fetch(
+            endpointUrl(API_CONFIG.endpoints.analyze),
+            {
+                method: "POST",
+                body: formData,
+                signal: controller.signal
+            }
+        );
 
         if (!response.ok) {
-            throw new Error(`Request failed with HTTP ${response.status}`);
+            const errorText = await response.text();
+
+            throw new Error(
+                `Backend returned HTTP ${response.status}: ${errorText}`
+            );
         }
 
         return await response.json();
-    } catch (error) {
-        apiRequestFailed = true;
-        console.warn(`Backend request unavailable: ${endpoint}`, error);
-        return null;
+
     } finally {
+
         clearTimeout(timeoutId);
+
     }
 }
 
-async function fetchCaseData() {
-    return (await fetchJson(API_CONFIG.endpoints.case)) || mockCaseResponse();
-}
 
-async function fetchArtifacts() {
-    return (await fetchJson(API_CONFIG.endpoints.artifacts)) || MOCK_DATA.artifacts;
-}
+/* =========================================================
+   RESPONSE NORMALIZATION
+========================================================= */
 
-async function fetchFragments() {
-    return (await fetchJson(API_CONFIG.endpoints.fragments)) || MOCK_DATA.fragments;
-}
+function normalizeBackendResponse(response) {
 
-async function fetchFragmentDetails(fragmentId) {
-    const fragments = await fetchFragments();
-    return fragments.find((fragment) => fragment.id === fragmentId) || null;
-}
+    const caseData = response?.case || {};
+    const evidence = response?.evidence || {};
+    const fragmentAnalysis = response?.fragment_analysis || {};
+    const integrity = response?.integrity || {};
+    const corruption = response?.corruption || {};
+    const aiAnalysis = response?.ai_analysis || {};
+    const reconstruction = response?.reconstruction || {};
+    const audit = response?.audit || {};
 
-async function fetchTimeline() {
-    return (await fetchJson(API_CONFIG.endpoints.timeline)) || MOCK_DATA.timeline;
-}
+    const reconstructionReport =
+        reconstruction.report || {};
 
-async function fetchAuditData() {
-    return (await fetchJson(API_CONFIG.endpoints.audit)) || mockAuditResponse();
-}
+    const corruptionSummary =
+        corruption.summary || {};
 
-function normalizeCase(caseResponse) {
-    const stats = caseResponse?.stats || {};
+    const aiSummary =
+        aiAnalysis.summary || {};
+
+    const totalFragments =
+        Number(
+            fragmentAnalysis.total_fragments ||
+            reconstructionReport.total_original_fragments ||
+            0
+        );
+
+    const recoveredFragments =
+        Number(
+            reconstructionReport.recovered_fragments ||
+            corruptionSummary.intact_fragments ||
+            0
+        );
+
+    const missingFragments =
+        Number(
+            reconstructionReport.missing_fragments ||
+            corruptionSummary.missing_fragments ||
+            0
+        );
+
+    const corruptedFragments =
+        Number(
+            corruptionSummary.corrupted_fragments ||
+            0
+        );
+
+    const coverage =
+        Number(
+            corruptionSummary.coverage_percentage ??
+            (
+                totalFragments
+                    ? ((recoveredFragments + corruptedFragments) /
+                        totalFragments) * 100
+                    : 0
+            )
+        );
+
+    const intactPercentage =
+        Number(
+            corruptionSummary.intact_percentage ??
+            (
+                totalFragments
+                    ? (recoveredFragments / totalFragments) * 100
+                    : 0
+            )
+        );
+
+    const anomalyFragments =
+        Number(
+            aiSummary.fragments_analyzed ||
+            0
+        );
+
+    /*
+     * The current backend uses heuristic anomaly analysis.
+     * Therefore we do NOT invent an AI confidence value.
+     */
+    const aiConfidence = 0;
+
     return {
-        ...caseResponse,
-        id: caseResponse?.case_id || caseResponse?.id || MOCK_DATA.caseInfo.id,
-        evidenceId: caseResponse?.evidence_id || caseResponse?.evidenceId || MOCK_DATA.caseInfo.evidenceId,
-        sha256: caseResponse?.sha256 || MOCK_DATA.caseInfo.sha256,
-        inputTimestamp: caseResponse?.input_timestamp || caseResponse?.inputTimestamp || MOCK_DATA.caseInfo.inputTimestamp,
-        processingTimestamp: caseResponse?.processing_timestamp || caseResponse?.processingTimestamp || MOCK_DATA.caseInfo.processingTimestamp,
-        operationCount: caseResponse?.operation_count || caseResponse?.operationCount || MOCK_DATA.caseInfo.operationCount,
-        originalHash: caseResponse?.original_evidence_hash || caseResponse?.originalHash || MOCK_DATA.caseInfo.originalHash,
-        recoveredArtifactHash: caseResponse?.recovered_artifact_hash || caseResponse?.recoveredArtifactHash || MOCK_DATA.caseInfo.recoveredArtifactHash,
-        provenanceStatus: caseResponse?.provenance_status || caseResponse?.provenanceStatus || MOCK_DATA.caseInfo.provenanceStatus,
+
+        caseInfo: {
+            id: caseData.case_id || "UNKNOWN",
+            evidenceId: evidence.filename || "UNKNOWN",
+            sha256: evidence.sha256 || "",
+            inputTimestamp: caseData.created_at || "",
+            processingTimestamp: audit.created_at || caseData.created_at || "",
+            operationCount: Number(audit.event_count || 0),
+            originalHash: evidence.sha256 || "",
+            recoveredArtifactHash:
+                reconstruction.candidate?.sha256 || "",
+            provenanceStatus:
+                audit.status === "audit_log_created"
+                    ? "Tamper-evident audit recorded"
+                    : "Audit unavailable"
+        },
+
         stats: {
-            fileCount: stats.file_count ?? stats.fileCount ?? MOCK_DATA.stats.fileCount,
-            recovered: stats.recovery_percentage ?? stats.recovered ?? MOCK_DATA.stats.recovered,
-            confidence: stats.ai_confidence ?? stats.confidence ?? MOCK_DATA.stats.confidence,
-            totalFragments: stats.fragment_count ?? stats.totalFragments ?? MOCK_DATA.stats.totalFragments,
-            inferred: stats.inferred ?? MOCK_DATA.stats.inferred,
-            missing: stats.missing ?? MOCK_DATA.stats.missing
+            fileCount: 1,
+            recovered: Math.round(intactPercentage),
+            confidence: aiConfidence,
+            totalFragments,
+            inferred: 0,
+            missing:
+                totalFragments
+                    ? Math.round(
+                        (missingFragments / totalFragments) * 100
+                    )
+                    : 0
+        },
+
+        artifacts: [
+            {
+                name: evidence.filename || "Evidence File",
+                type: evidence.file_type || "Unknown",
+                recovery: Math.round(intactPercentage),
+                integrity: Math.round(intactPercentage),
+                corruption:
+                    totalFragments
+                        ? Math.round(
+                            ((corruptedFragments + missingFragments) /
+                                totalFragments) * 100
+                        )
+                        : 0,
+                state:
+                    missingFragments === 0 &&
+                    corruptedFragments === 0
+                        ? "recovered"
+                        : "partial",
+
+                explanation:
+                    "Anvaya analyzed the evidence using fragment integrity, corruption comparison, anomaly analysis and reconstruction mapping.",
+
+                explainability: [
+                    `Evidence SHA-256: ${evidence.sha256 || "Unavailable"}.`,
+                    `Total fragments analyzed: ${totalFragments}.`,
+                    `Intact fragments: ${recoveredFragments}.`,
+                    `Corrupted fragments: ${corruptedFragments}.`,
+                    `Missing fragments: ${missingFragments}.`,
+                    `Evidence coverage: ${coverage.toFixed(2)}%.`,
+                    `Anomaly analysis completed on ${anomalyFragments} fragments.`,
+                    reconstruction.candidate
+                        ? "A partial reconstruction candidate was generated."
+                        : "No reconstruction candidate was generated."
+                ]
+            }
+        ],
+
+        fragments: buildFrontendFragments(
+            reconstruction.map || [],
+            evidence.filename || "Evidence File"
+        ),
+
+        timeline: buildTimeline(response),
+
+        audit: {
+            caseId: caseData.case_id || "",
+            evidenceId: evidence.filename || "",
+            sha256: evidence.sha256 || "",
+            inputTimestamp: caseData.created_at || "",
+            processingTimestamp:
+                audit.created_at ||
+                caseData.created_at ||
+                "",
+            operationCount:
+                Number(audit.event_count || 0),
+            originalHash: evidence.sha256 || "",
+            recoveredHash:
+                reconstruction.candidate?.sha256 || "",
+            provenanceStatus:
+                audit.status === "audit_log_created"
+                    ? "Tamper-evident audit recorded"
+                    : "Unknown"
+        },
+
+        raw: response
+    };
+}
+
+
+/* =========================================================
+   BUILD FRONTEND FRAGMENTS
+========================================================= */
+
+function buildFrontendFragments(
+    reconstructionMap,
+    artifactName
+) {
+
+    if (!Array.isArray(reconstructionMap)) {
+        return [];
+    }
+
+    const fragments = reconstructionMap.map(
+        (item, index) => {
+
+            let stateValue = "missing";
+
+            if (item.status === "RECOVERED") {
+                stateValue = "recovered";
+            } else if (item.status === "CORRUPTED") {
+                stateValue = "inferred";
+            } else if (item.status === "MISSING") {
+                stateValue = "missing";
+            }
+
+            let hashStatus = "Unknown";
+
+            if (item.status === "RECOVERED") {
+                hashStatus = "Verified";
+            } else if (item.status === "CORRUPTED") {
+                hashStatus = "Corrupted";
+            } else if (item.status === "MISSING") {
+                hashStatus = "Missing";
+            }
+
+            let reasoning =
+                "No additional fragment reasoning was supplied.";
+
+            if (item.status === "RECOVERED") {
+
+                reasoning =
+                    "The surviving fragment matched the original fragment by SHA-256.";
+
+            } else if (item.status === "CORRUPTED") {
+
+                reasoning =
+                    `${item.changed_bytes || 0} changed byte(s) were detected in this fragment.`;
+
+            } else if (item.status === "MISSING") {
+
+                reasoning =
+                    "No surviving physical fragment was matched to this original position.";
+
+            }
+
+            return {
+                id: `F${String(index + 1).padStart(3, "0")}`,
+                artifact: artifactName,
+                type:
+                    item.status === "RECOVERED"
+                        ? "Recovered Fragment"
+                        : item.status === "CORRUPTED"
+                            ? "Corrupted Fragment"
+                            : "Missing Fragment",
+
+                state: stateValue,
+
+                compatibility:
+                    item.status === "RECOVERED"
+                        ? 1
+                        : item.status === "CORRUPTED"
+                            ? 0.5
+                            : 0,
+
+                hashStatus,
+
+                reasoning,
+
+                connections: [],
+
+                originalIndex: item.original_index,
+                filename: item.filename,
+                sha256: item.sha256,
+                size: item.size,
+                changedBytes: item.changed_bytes || 0,
+
+                x: 70 + (index % 6) * 115,
+                y: 70 + Math.floor(index / 6) * 70
+            };
+        }
+    );
+
+    /*
+     * Connect consecutive fragments only to visualize
+     * reconstruction order.
+     *
+     * This is NOT an AI-inferred relationship.
+     */
+    fragments.forEach(
+        (fragment, index) => {
+
+            if (index < fragments.length - 1) {
+
+                fragment.connections = [
+                    fragments[index + 1].id
+                ];
+
+            }
+
+        }
+    );
+
+    return fragments;
+}
+
+
+/* =========================================================
+   BUILD TIMELINE
+========================================================= */
+
+function buildTimeline(response) {
+
+    const caseData = response?.case || {};
+    const evidence = response?.evidence || {};
+    const fragmentAnalysis =
+        response?.fragment_analysis || {};
+
+    const integrity =
+        response?.integrity || {};
+
+    const corruption =
+        response?.corruption || {};
+
+    const ai =
+        response?.ai_analysis || {};
+
+    const reconstruction =
+        response?.reconstruction || {};
+
+    const audit =
+        response?.audit || {};
+
+    const events = [];
+
+    events.push({
+        time: formatTimestamp(caseData.created_at),
+        operation: "Case created",
+        status: "success",
+        explanation:
+            `Created case ${caseData.case_id || "unknown"}.`
+    });
+
+    events.push({
+        time: formatTimestamp(caseData.created_at),
+        operation: "Evidence ingestion",
+        status: "success",
+        explanation:
+            `Evidence ${evidence.filename || "file"} was ingested and hashed.`
+    });
+
+    events.push({
+        time: formatTimestamp(caseData.created_at),
+        operation: "Fragment analysis",
+        status: "success",
+        explanation:
+            `${fragmentAnalysis.total_fragments || 0} fragments were analyzed.`
+    });
+
+    if (integrity) {
+
+        events.push({
+            time: formatTimestamp(caseData.created_at),
+            operation: "Integrity analysis",
+            status: "success",
+            explanation:
+                "Fragment integrity and duplicate analysis completed."
+        });
+
+    }
+
+    if (corruption?.summary) {
+
+        events.push({
+            time: formatTimestamp(caseData.created_at),
+            operation: "Corruption analysis",
+            status:
+                Number(corruption.summary.corrupted_fragments || 0) > 0
+                    ? "warning"
+                    : "success",
+
+            explanation:
+                `${corruption.summary.corrupted_fragments || 0} corrupted and ${corruption.summary.missing_fragments || 0} missing fragment(s) detected.`
+        });
+
+    }
+
+    if (ai?.summary) {
+
+        events.push({
+            time: formatTimestamp(caseData.created_at),
+            operation: "AI anomaly analysis",
+            status: "success",
+            explanation:
+                `Explainable heuristic analysis completed on ${ai.summary.fragments_analyzed || 0} fragments.`
+        });
+
+    }
+
+    if (reconstruction?.candidate) {
+
+        events.push({
+            time: formatTimestamp(caseData.created_at),
+            operation: "Reconstruction candidate generated",
+            status: "warning",
+            explanation:
+                "A partial reconstruction candidate was generated from surviving evidence."
+        });
+
+    }
+
+    if (audit?.event_count) {
+
+        events.push({
+            time: formatTimestamp(caseData.created_at),
+            operation: "Audit log created",
+            status: "success",
+            explanation:
+                `${audit.event_count} audit event(s) were recorded.`
+        });
+
+    }
+
+    return events;
+}
+
+
+/* =========================================================
+   DEMO RESPONSES
+========================================================= */
+
+function mockResponse() {
+
+    return {
+        case: {
+            case_id: MOCK_DATA.caseInfo.id,
+            created_at: MOCK_DATA.caseInfo.processingTimestamp,
+            status: "analysis_complete"
+        },
+
+        evidence: {
+            filename: "demo-evidence.pdf",
+            file_type: "PDF",
+            size_bytes: 321520,
+            sha256: MOCK_DATA.caseInfo.sha256
+        },
+
+        fragment_analysis: {
+            total_fragments: 79,
+            fragment_size: 4096
+        },
+
+        integrity: {
+            original_fragments: 79,
+            physical_fragments: 76,
+            unique_fragments: 74,
+            duplicate_groups: 2,
+            duplicate_files: 4,
+            missing_estimate: 5,
+            coverage_percentage: 93.67
+        },
+
+        corruption: {
+            summary: {
+                original_fragments: 79,
+                intact_fragments: 72,
+                corrupted_fragments: 2,
+                missing_fragments: 5,
+                total_changed_bytes: 19,
+                coverage_percentage: 93.67,
+                intact_percentage: 91.14
+            },
+
+            fragments: []
+        },
+
+        ai_analysis: {
+            method:
+                "Explainable AI-assisted heuristic analysis",
+
+            summary: {
+                fragments_analyzed: 76,
+                normal: 76,
+                suspicious: 0,
+                high_anomaly: 0,
+                analysis_errors: 0
+            },
+
+            fragments: []
+        },
+
+        reconstruction: {
+            status: "candidate_generated",
+
+            report: {
+                total_original_fragments: 79,
+                recovered_fragments: 72,
+                missing_fragments: 5,
+                fragment_coverage_percentage: 91.14
+            },
+
+            candidate: {
+                filename:
+                    "CASE-2026-001_reconstruction_candidate.bin",
+
+                status: "CANDIDATE_ONLY",
+
+                total_bytes: 321520,
+                recovered_bytes: 303104,
+                missing_bytes: 18416,
+                recovery_percentage: 94.27,
+
+                sha256:
+                    MOCK_DATA.caseInfo.recoveredArtifactHash
+            },
+
+            map: []
+        },
+
+        audit: {
+            status: "audit_log_created",
+            audit_sha256:
+                "267fd83cfeaaad1fb8fbf5d8d00b0100cabb553bbeab9905046e39a882de7fb5",
+            event_count: 7
         }
     };
 }
 
-function normalizeArtifact(artifact) {
-    return {
-        ...artifact,
-        recovery: artifact.recovery ?? artifact.integrity ?? 0,
-        integrity: artifact.integrity ?? artifact.recovery ?? 0,
-        corruption: artifact.corruption ?? 0,
-        state: artifact.state || "missing",
-        explainability: artifact.explainability || [],
-        explanation: artifact.explanation || "No explanatory analysis was supplied by the backend."
-    };
-}
 
-function normalizeFragment(fragment, index) {
-    return {
-        ...fragment,
-        hashStatus: fragment.hash_status || fragment.hashStatus || "Unknown",
-        reasoning: fragment.reasoning || "No matching rationale was supplied by the backend.",
-        compatibility: Number(fragment.compatibility ?? 0),
-        connections: fragment.connections || [],
-        x: fragment.x ?? 90 + (index % 5) * 125,
-        y: fragment.y ?? 120 + (index % 3) * 60
-    };
-}
-
-function normalizeTimeline(event) {
-    return {
-        ...event,
-        time: event.timestamp || event.time || "--:--",
-        explanation: event.description || event.explanation || "No event description was supplied."
-    };
-}
-
-function normalizeAudit(audit) {
-    return {
-        ...audit,
-        caseId: audit?.case_id || audit?.caseId || "",
-        evidenceId: audit?.evidence_id || audit?.evidenceId || "",
-        sha256: audit?.sha256 || "",
-        inputTimestamp: audit?.input_timestamp || audit?.inputTimestamp || "",
-        processingTimestamp: audit?.processing_timestamp || audit?.processingTimestamp || "",
-        operationCount: audit?.operation_count ?? audit?.operationCount ?? 0,
-        originalHash: audit?.original_evidence_hash || audit?.originalHash || "",
-        recoveredHash: audit?.recovered_artifact_hash || audit?.recoveredHash || "",
-        provenanceStatus: audit?.provenance_status || audit?.provenanceStatus || "Unknown"
-    };
-}
+/* =========================================================
+   MODE INDICATOR
+========================================================= */
 
 function renderModeIndicator() {
-    const indicator = document.getElementById("modeIndicator");
-    const label = document.getElementById("modeLabel");
-    const note = document.getElementById("connectionNote");
-    const dataSourceNote = document.getElementById("dataSourceNote");
+
+    const indicator =
+        document.getElementById("modeIndicator");
+
+    const label =
+        document.getElementById("modeLabel");
+
+    const note =
+        document.getElementById("connectionNote");
+
+    const dataSourceNote =
+        document.getElementById("dataSourceNote");
+
     if (!indicator || !label) return;
 
     indicator.dataset.mode = state.mode;
+
     if (state.mode === "live") {
+
         label.textContent = "LIVE BACKEND";
-        if (note) note.textContent = "Connected to the FastAPI forensic engine.";
-        if (dataSourceNote) dataSourceNote.textContent = "Live API data";
+
+        if (note) {
+            note.textContent =
+                "Connected to the FastAPI forensic engine.";
+        }
+
+        if (dataSourceNote) {
+            dataSourceNote.textContent =
+                "Live API data";
+        }
+
     } else if (state.mode === "demo") {
+
         label.textContent = "DEMO MODE";
-        if (note) note.textContent = "Backend unavailable - using demonstration dataset.";
-        if (dataSourceNote) dataSourceNote.textContent = "Mock / demo data";
+
+        if (note) {
+            note.textContent =
+                "Backend unavailable - using demonstration dataset.";
+        }
+
+        if (dataSourceNote) {
+            dataSourceNote.textContent =
+                "Mock / demo data";
+        }
+
     } else {
-        label.textContent = "CONNECTING TO FORENSIC ENGINE...";
-        if (note) note.textContent = "Loading evidence...";
-        if (dataSourceNote) dataSourceNote.textContent = "Loading data";
+
+        label.textContent =
+            "CONNECTING TO FORENSIC ENGINE...";
+
+        if (note) {
+            note.textContent =
+                "Loading evidence...";
+        }
+
+        if (dataSourceNote) {
+            dataSourceNote.textContent =
+                "Loading data";
+        }
     }
 }
 
-function renderCaseMeta(caseInfo, audit) {
-    const label = document.getElementById("caseIdLabel");
-    if (label) label.textContent = caseInfo.id || "CASE-2026-001";
 
-    const auditCase = document.getElementById("auditCaseId");
-    const evidenceId = document.getElementById("auditEvidenceId");
-    const auditHash = document.getElementById("auditHash");
-    const inputTime = document.getElementById("auditInputTime");
-    const processTime = document.getElementById("auditProcessTime");
-    const opCount = document.getElementById("auditOps");
-    const originalHash = document.getElementById("auditOriginalHash");
-    const recoveredHash = document.getElementById("auditRecoveredHash");
-    const provenance = document.getElementById("auditProvenance");
+/* =========================================================
+   CASE META
+========================================================= */
+
+function renderCaseMeta(caseInfo, audit) {
+
+    const label =
+        document.getElementById("caseIdLabel");
+
+    if (label) {
+        label.textContent =
+            caseInfo?.id || "UNKNOWN";
+    }
+
+    const auditCase =
+        document.getElementById("auditCaseId");
+
+    const evidenceId =
+        document.getElementById("auditEvidenceId");
+
+    const auditHash =
+        document.getElementById("auditHash");
+
+    const inputTime =
+        document.getElementById("auditInputTime");
+
+    const processTime =
+        document.getElementById("auditProcessTime");
+
+    const opCount =
+        document.getElementById("auditOps");
+
+    const originalHash =
+        document.getElementById("auditOriginalHash");
+
+    const recoveredHash =
+        document.getElementById("auditRecoveredHash");
+
+    const provenance =
+        document.getElementById("auditProvenance");
 
     const auditData = audit || {};
-    if (auditCase) auditCase.textContent = auditData.caseId || caseInfo.id || "CASE-2026-001";
-    if (evidenceId) evidenceId.textContent = auditData.evidenceId || caseInfo.evidenceId || "EVC-18-421";
-    if (auditHash) auditHash.textContent = (auditData.sha256 || caseInfo.sha256 || "a9d3…f4b8").slice(0, 10) + "…" + (auditData.sha256 || caseInfo.sha256 || "a9d3…f4b8").slice(-6);
-    if (inputTime) inputTime.textContent = auditData.inputTimestamp || caseInfo.inputTimestamp || "2026-09-21 09:42 UTC";
-    if (processTime) processTime.textContent = auditData.processingTimestamp || caseInfo.processingTimestamp || "2026-09-22 14:11 UTC";
-    if (opCount) opCount.textContent = auditData.operationCount || caseInfo.operationCount || 14;
-    if (originalHash) originalHash.textContent = (auditData.originalHash || caseInfo.originalHash || "66fb…9bb1").slice(0, 10) + "…" + (auditData.originalHash || caseInfo.originalHash || "66fb…9bb1").slice(-6);
-    if (recoveredHash) recoveredHash.textContent = (auditData.recoveredHash || caseInfo.recoveredArtifactHash || "4a1c…c80e").slice(0, 10) + "…" + (auditData.recoveredHash || caseInfo.recoveredArtifactHash || "4a1c…c80e").slice(-6);
-    if (provenance) provenance.textContent = auditData.provenanceStatus || caseInfo.provenanceStatus || "Chain preserved";
+
+    if (auditCase) {
+        auditCase.textContent =
+            auditData.caseId ||
+            caseInfo?.id ||
+            "—";
+    }
+
+    if (evidenceId) {
+        evidenceId.textContent =
+            auditData.evidenceId ||
+            "—";
+    }
+
+    if (auditHash) {
+        auditHash.textContent =
+            shortenHash(auditData.sha256);
+    }
+
+    if (inputTime) {
+        inputTime.textContent =
+            formatTimestamp(
+                auditData.inputTimestamp
+            );
+    }
+
+    if (processTime) {
+        processTime.textContent =
+            formatTimestamp(
+                auditData.processingTimestamp
+            );
+    }
+
+    if (opCount) {
+        opCount.textContent =
+            auditData.operationCount || 0;
+    }
+
+    if (originalHash) {
+        originalHash.textContent =
+            shortenHash(auditData.originalHash);
+    }
+
+    if (recoveredHash) {
+        recoveredHash.textContent =
+            shortenHash(auditData.recoveredHash);
+    }
+
+    if (provenance) {
+        provenance.textContent =
+            auditData.provenanceStatus ||
+            "Unknown";
+    }
 }
 
+
+/* =========================================================
+   CASE / AUDIT
+========================================================= */
+
 function renderCase() {
-    renderCaseMeta(state.case, state.audit);
+
+    renderCaseMeta(
+        state.case,
+        state.audit
+    );
 }
 
 function renderAudit() {
-    renderCaseMeta(state.case, state.audit);
+
+    renderCaseMeta(
+        state.case,
+        state.audit
+    );
 }
+
+
+/* =========================================================
+   STATISTICS
+========================================================= */
 
 function renderStats(stats) {
+
     const map = {
-        fileCount: document.getElementById("fileCount"),
-        recoveredCount: document.getElementById("recoveredCount"),
-        confidence: document.getElementById("confidence"),
-        fragmentCount: document.getElementById("fragmentCount"),
-        recoveredMetric: document.getElementById("recoveredMetric"),
-        inferredMetric: document.getElementById("inferredMetric"),
-        missingMetric: document.getElementById("missingMetric"),
-        recoveredMetricBar: document.getElementById("recoveredMetricBar"),
-        inferredMetricBar: document.getElementById("inferredMetricBar"),
-        missingMetricBar: document.getElementById("missingMetricBar")
+
+        fileCount:
+            document.getElementById("fileCount"),
+
+        recoveredCount:
+            document.getElementById("recoveredCount"),
+
+        confidence:
+            document.getElementById("confidence"),
+
+        fragmentCount:
+            document.getElementById("fragmentCount"),
+
+        recoveredMetric:
+            document.getElementById("recoveredMetric"),
+
+        inferredMetric:
+            document.getElementById("inferredMetric"),
+
+        missingMetric:
+            document.getElementById("missingMetric"),
+
+        recoveredMetricBar:
+            document.getElementById("recoveredMetricBar"),
+
+        inferredMetricBar:
+            document.getElementById("inferredMetricBar"),
+
+        missingMetricBar:
+            document.getElementById("missingMetricBar")
     };
 
-    if (map.fileCount) map.fileCount.textContent = stats.fileCount.toLocaleString();
-    if (map.recoveredCount) map.recoveredCount.textContent = `${stats.recovered}%`;
-    if (map.confidence) map.confidence.textContent = `${stats.confidence}%`;
-    if (map.fragmentCount) map.fragmentCount.textContent = stats.totalFragments.toLocaleString();
+    if (map.fileCount) {
+        map.fileCount.textContent =
+            Number(stats.fileCount || 0).toLocaleString();
+    }
 
-    if (map.recoveredMetric) map.recoveredMetric.textContent = `${stats.recovered}%`;
-    if (map.inferredMetric) map.inferredMetric.textContent = `${stats.inferred}%`;
-    if (map.missingMetric) map.missingMetric.textContent = `${stats.missing}%`;
+    if (map.recoveredCount) {
+        map.recoveredCount.textContent =
+            `${percentage(stats.recovered)}%`;
+    }
 
-    if (map.recoveredMetricBar) map.recoveredMetricBar.style.width = `${stats.recovered}%`;
-    if (map.inferredMetricBar) map.inferredMetricBar.style.width = `${stats.inferred}%`;
-    if (map.missingMetricBar) map.missingMetricBar.style.width = `${stats.missing}%`;
+    if (map.confidence) {
+
+        if (Number(stats.confidence) > 0) {
+
+            map.confidence.textContent =
+                `${percentage(stats.confidence)}%`;
+
+        } else {
+
+            map.confidence.textContent =
+                "N/A";
+        }
+    }
+
+    if (map.fragmentCount) {
+        map.fragmentCount.textContent =
+            Number(stats.totalFragments || 0).toLocaleString();
+    }
+
+    if (map.recoveredMetric) {
+        map.recoveredMetric.textContent =
+            `${percentage(stats.recovered)}%`;
+    }
+
+    if (map.inferredMetric) {
+        map.inferredMetric.textContent =
+            `${percentage(stats.inferred)}%`;
+    }
+
+    if (map.missingMetric) {
+        map.missingMetric.textContent =
+            `${percentage(stats.missing)}%`;
+    }
+
+    if (map.recoveredMetricBar) {
+        map.recoveredMetricBar.style.width =
+            `${percentage(stats.recovered)}%`;
+    }
+
+    if (map.inferredMetricBar) {
+        map.inferredMetricBar.style.width =
+            `${percentage(stats.inferred)}%`;
+    }
+
+    if (map.missingMetricBar) {
+        map.missingMetricBar.style.width =
+            `${percentage(stats.missing)}%`;
+    }
 }
+
+
+/* =========================================================
+   ARTIFACT TABLE
+========================================================= */
 
 function renderArtifactTable(artifacts) {
-    const tableBody = document.getElementById("artifactTableBody");
+
+    const tableBody =
+        document.getElementById(
+            "artifactTableBody"
+        );
+
     if (!tableBody) return;
 
-    tableBody.innerHTML = artifacts
-        .map((artifact) => {
-            const stateClass = artifact.state === "recovered" ? "recovered" : artifact.state === "partial" ? "partial" : "missing";
-            const recoveryValue = artifact.recovery ?? artifact.integrity ?? 0;
+    tableBody.innerHTML =
+        artifacts
+            .map((artifact) => {
 
-            return `
-                <div class="artifact-row" data-artifact-name="${artifact.name}">
-                    <span class="artifact-name">${artifact.name}</span>
-                    <span class="artifact-type">${artifact.type}</span>
-                    <span class="artifact-recovery">${recoveryValue}%</span>
-                    <span class="badge ${stateClass}">${artifact.state}</span>
-                </div>
-            `;
-        })
-        .join("");
+                const stateClass =
+                    artifact.state === "recovered"
+                        ? "recovered"
+                        : artifact.state === "partial"
+                            ? "partial"
+                            : "missing";
 
-    tableBody.querySelectorAll(".artifact-row").forEach((row) => {
-        row.addEventListener("click", () => {
-            const name = row.dataset.artifactName;
-            const artifact = artifacts.find((item) => item.name === name);
-            if (artifact) {
-                state.selectedArtifact = artifact;
-                openArtifactModal(artifact);
-            }
+                const recoveryValue =
+                    artifact.recovery ??
+                    artifact.integrity ??
+                    0;
+
+                return `
+                    <div
+                        class="artifact-row"
+                        data-artifact-name="${escapeHtml(
+                            artifact.name
+                        )}"
+                    >
+
+                        <span class="artifact-name">
+                            ${escapeHtml(artifact.name)}
+                        </span>
+
+                        <span class="artifact-type">
+                            ${escapeHtml(artifact.type)}
+                        </span>
+
+                        <span class="artifact-recovery">
+                            ${recoveryValue}%
+                        </span>
+
+                        <span class="badge ${stateClass}">
+                            ${escapeHtml(artifact.state)}
+                        </span>
+
+                    </div>
+                `;
+            })
+            .join("");
+
+    tableBody
+        .querySelectorAll(".artifact-row")
+        .forEach((row) => {
+
+            row.addEventListener(
+                "click",
+                () => {
+
+                    const name =
+                        row.dataset.artifactName;
+
+                    const artifact =
+                        artifacts.find(
+                            (item) =>
+                                item.name === name
+                        );
+
+                    if (artifact) {
+
+                        state.selectedArtifact =
+                            artifact;
+
+                        openArtifactModal(
+                            artifact
+                        );
+                    }
+                }
+            );
         });
-    });
 }
+
+
+/* =========================================================
+   TIMELINE
+========================================================= */
 
 function renderTimeline(events) {
-    const timelineList = document.getElementById("timelineList");
+
+    const timelineList =
+        document.getElementById(
+            "timelineList"
+        );
+
     if (!timelineList) return;
 
-    timelineList.innerHTML = events
-        .map((event) => {
-            const statusClass = {
-                success: "success",
-                warning: "warning",
-                muted: "muted"
-            }[event.status] || "muted";
+    timelineList.innerHTML =
+        events
+            .map((event) => {
 
-            return `
-                <div class="timeline-event">
-                    <div class="timeline-time">${event.time}</div>
-                    <div class="timeline-copy">
-                        <strong>${event.operation}</strong>
-                        <span>${event.explanation}</span>
+                const statusClass = {
+
+                    success: "success",
+                    warning: "warning",
+                    muted: "muted"
+
+                }[
+                    event.status
+                ] || "muted";
+
+                return `
+                    <div class="timeline-event">
+
+                        <div class="timeline-time">
+                            ${escapeHtml(event.time)}
+                        </div>
+
+                        <div class="timeline-copy">
+
+                            <strong>
+                                ${escapeHtml(event.operation)}
+                            </strong>
+
+                            <span>
+                                ${escapeHtml(event.explanation)}
+                            </span>
+
+                        </div>
+
+                        <div class="timeline-status ${statusClass}">
+                            ${escapeHtml(event.status)}
+                        </div>
+
                     </div>
-                    <div class="timeline-status ${statusClass}">${event.status}</div>
-                </div>
-            `;
-        })
-        .join("");
+                `;
+            })
+            .join("");
 }
 
+
+/* =========================================================
+   FRAGMENT GRAPH
+========================================================= */
+
 function renderFragmentGraph(fragments) {
-    const svg = document.getElementById("fragmentGraph");
+
+    const svg =
+        document.getElementById(
+            "fragmentGraph"
+        );
+
     if (!svg) return;
 
     const stateColors = {
+
         recovered: "#35d07f",
         inferred: "#f4c95d",
         missing: "#ef6262"
+
     };
 
     const stateDash = {
+
         recovered: "0",
         inferred: "7 8",
         missing: "2 6"
+
     };
 
     const nodeMap = new Map();
-    fragments.forEach((fragment) => nodeMap.set(fragment.id, fragment));
+
+    fragments.forEach(
+        (fragment) =>
+            nodeMap.set(
+                fragment.id,
+                fragment
+            )
+    );
 
     svg.innerHTML = "";
 
-    const ns = "http://www.w3.org/2000/svg";
+    const ns =
+        "http://www.w3.org/2000/svg";
 
-    fragments.forEach((fragment) => {
-        fragment.connections.forEach((targetId) => {
-            const target = nodeMap.get(targetId);
-            if (!target) return;
+    /*
+     * Draw reconstruction-order connections.
+     */
+    fragments.forEach(
+        (fragment) => {
 
-            const line = document.createElementNS(ns, "line");
-            const strokeColor = stateColors[fragment.state] || stateColors.inferred;
-            line.setAttribute("x1", fragment.x);
-            line.setAttribute("y1", fragment.y);
-            line.setAttribute("x2", target.x);
-            line.setAttribute("y2", target.y);
-            line.setAttribute("stroke", strokeColor);
-            line.setAttribute("stroke-width", fragment.state === "missing" ? "1.8" : "2.6");
-            line.setAttribute("stroke-dasharray", stateDash[fragment.state] || stateDash.inferred);
-            line.setAttribute("stroke-linecap", "round");
-            line.setAttribute("opacity", fragment.state === "missing" ? "0.8" : "0.95");
-            svg.appendChild(line);
-        });
-    });
+            fragment.connections.forEach(
+                (targetId) => {
 
-    fragments.forEach((fragment) => {
-        const group = document.createElementNS(ns, "g");
-        group.setAttribute("class", "fragment-node");
-        group.setAttribute("tabindex", "0");
-        group.setAttribute("data-fragment-id", fragment.id);
-        group.style.cursor = "pointer";
+                    const target =
+                        nodeMap.get(targetId);
 
-        const circle = document.createElementNS(ns, "circle");
-        circle.setAttribute("cx", fragment.x);
-        circle.setAttribute("cy", fragment.y);
-        circle.setAttribute("r", 20);
-        circle.setAttribute("fill", stateColors[fragment.state] || stateColors.inferred);
-        circle.setAttribute("fill-opacity", fragment.state === "missing" ? "0.25" : "0.9");
-        circle.setAttribute("stroke", stateColors[fragment.state] || stateColors.inferred);
-        circle.setAttribute("stroke-width", "2.5");
-        circle.setAttribute("vector-effect", "non-scaling-stroke");
+                    if (!target) return;
 
-        const text = document.createElementNS(ns, "text");
-        text.setAttribute("x", fragment.x);
-        text.setAttribute("y", fragment.y + 4);
-        text.setAttribute("text-anchor", "middle");
-        text.setAttribute("fill", "#edf4ff");
-        text.setAttribute("font-size", "11");
-        text.setAttribute("font-family", "ui-monospace, SFMono-Regular, Consolas, monospace");
-        text.setAttribute("font-weight", "700");
-        text.textContent = fragment.id.replace("F", "");
+                    const line =
+                        document.createElementNS(
+                            ns,
+                            "line"
+                        );
 
-        group.appendChild(circle);
-        group.appendChild(text);
-        svg.appendChild(group);
+                    const strokeColor =
+                        stateColors[
+                            fragment.state
+                        ] ||
+                        stateColors.inferred;
 
-        const onSelect = () => updateFragmentDetails(fragment.id);
-        group.addEventListener("click", onSelect);
-        group.addEventListener("keydown", (event) => {
-            if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onSelect();
-            }
-        });
-    });
+                    line.setAttribute(
+                        "x1",
+                        fragment.x
+                    );
+
+                    line.setAttribute(
+                        "y1",
+                        fragment.y
+                    );
+
+                    line.setAttribute(
+                        "x2",
+                        target.x
+                    );
+
+                    line.setAttribute(
+                        "y2",
+                        target.y
+                    );
+
+                    line.setAttribute(
+                        "stroke",
+                        strokeColor
+                    );
+
+                    line.setAttribute(
+                        "stroke-width",
+                        "2.2"
+                    );
+
+                    line.setAttribute(
+                        "stroke-dasharray",
+                        stateDash[
+                            fragment.state
+                        ] ||
+                        stateDash.inferred
+                    );
+
+                    line.setAttribute(
+                        "stroke-linecap",
+                        "round"
+                    );
+
+                    line.setAttribute(
+                        "opacity",
+                        "0.8"
+                    );
+
+                    svg.appendChild(line);
+                }
+            );
+        }
+    );
+
+
+    /*
+     * Draw fragment nodes.
+     */
+    fragments.forEach(
+        (fragment) => {
+
+            const group =
+                document.createElementNS(
+                    ns,
+                    "g"
+                );
+
+            group.setAttribute(
+                "class",
+                "fragment-node"
+            );
+
+            group.setAttribute(
+                "tabindex",
+                "0"
+            );
+
+            group.setAttribute(
+                "data-fragment-id",
+                fragment.id
+            );
+
+            group.style.cursor =
+                "pointer";
+
+            const circle =
+                document.createElementNS(
+                    ns,
+                    "circle"
+                );
+
+            circle.setAttribute(
+                "cx",
+                fragment.x
+            );
+
+            circle.setAttribute(
+                "cy",
+                fragment.y
+            );
+
+            circle.setAttribute(
+                "r",
+                "18"
+            );
+
+            const color =
+                stateColors[
+                    fragment.state
+                ] ||
+                stateColors.inferred;
+
+            circle.setAttribute(
+                "fill",
+                color
+            );
+
+            circle.setAttribute(
+                "fill-opacity",
+                fragment.state === "missing"
+                    ? "0.25"
+                    : "0.9"
+            );
+
+            circle.setAttribute(
+                "stroke",
+                color
+            );
+
+            circle.setAttribute(
+                "stroke-width",
+                "2.5"
+            );
+
+            const text =
+                document.createElementNS(
+                    ns,
+                    "text"
+                );
+
+            text.setAttribute(
+                "x",
+                fragment.x
+            );
+
+            text.setAttribute(
+                "y",
+                fragment.y + 4
+            );
+
+            text.setAttribute(
+                "text-anchor",
+                "middle"
+            );
+
+            text.setAttribute(
+                "fill",
+                "#edf4ff"
+            );
+
+            text.setAttribute(
+                "font-size",
+                "9"
+            );
+
+            text.setAttribute(
+                "font-family",
+                "ui-monospace, SFMono-Regular, Consolas, monospace"
+            );
+
+            text.setAttribute(
+                "font-weight",
+                "700"
+            );
+
+            text.textContent =
+                fragment.id.replace(
+                    "F",
+                    ""
+                );
+
+            group.appendChild(circle);
+            group.appendChild(text);
+
+            svg.appendChild(group);
+
+            const onSelect =
+                () =>
+                    updateFragmentDetails(
+                        fragment.id
+                    );
+
+            group.addEventListener(
+                "click",
+                onSelect
+            );
+
+            group.addEventListener(
+                "keydown",
+                (event) => {
+
+                    if (
+                        event.key === "Enter" ||
+                        event.key === " "
+                    ) {
+
+                        event.preventDefault();
+
+                        onSelect();
+                    }
+                }
+            );
+        }
+    );
 }
+
+
+/* =========================================================
+   FRAGMENT DETAILS
+========================================================= */
 
 function updateFragmentDetails(fragmentId) {
-    const fragment = state.fragments.find((item) => item.id === fragmentId);
+
+    const fragment =
+        state.fragments.find(
+            (item) =>
+                item.id === fragmentId
+        );
+
     if (!fragment) return;
 
-    state.selectedFragment = fragment;
+    state.selectedFragment =
+        fragment;
 
     const stateLabel = {
+
         recovered: "Recovered",
-        inferred: "AI Inference",
-        missing: "Missing / Unknown"
-    }[fragment.state] || "Unknown";
 
-    const idLabel = document.getElementById("fragmentIdLabel");
-    const artifactLabel = document.getElementById("fragmentArtifact");
-    const typeLabel = document.getElementById("fragmentType");
-    const compatLabel = document.getElementById("fragmentCompat");
-    const stateLabelNode = document.getElementById("fragmentState");
-    const hashLabel = document.getElementById("fragmentHash");
-    const reasoning = document.getElementById("fragmentReasoning");
+        inferred:
+            "Corrupted / Requires Review",
 
-    if (idLabel) idLabel.textContent = fragment.id;
-    if (artifactLabel) artifactLabel.textContent = fragment.artifact;
-    if (typeLabel) typeLabel.textContent = fragment.type;
-    if (compatLabel) compatLabel.textContent = fragment.compatibility.toFixed(2);
-    if (stateLabelNode) stateLabelNode.textContent = stateLabel;
-    if (hashLabel) hashLabel.textContent = fragment.hashStatus;
-    if (reasoning) reasoning.textContent = fragment.reasoning;
+        missing:
+            "Missing / Unknown"
 
-    document.querySelectorAll(".fragment-node").forEach((node) => {
-        const circle = node.querySelector("circle");
-        if (!circle) return;
-        const selected = node.dataset.fragmentId === fragmentId;
-        circle.setAttribute("stroke-width", selected ? "4" : "2.5");
-        circle.setAttribute("r", selected ? "22" : "20");
-        node.setAttribute("aria-selected", selected ? "true" : "false");
-    });
+    }[
+        fragment.state
+    ] || "Unknown";
+
+
+    const idLabel =
+        document.getElementById(
+            "fragmentIdLabel"
+        );
+
+    const artifactLabel =
+        document.getElementById(
+            "fragmentArtifact"
+        );
+
+    const typeLabel =
+        document.getElementById(
+            "fragmentType"
+        );
+
+    const compatLabel =
+        document.getElementById(
+            "fragmentCompat"
+        );
+
+    const stateLabelNode =
+        document.getElementById(
+            "fragmentState"
+        );
+
+    const hashLabel =
+        document.getElementById(
+            "fragmentHash"
+        );
+
+    const reasoning =
+        document.getElementById(
+            "fragmentReasoning"
+        );
+
+
+    if (idLabel) {
+        idLabel.textContent =
+            fragment.id;
+    }
+
+    if (artifactLabel) {
+        artifactLabel.textContent =
+            fragment.artifact;
+    }
+
+    if (typeLabel) {
+        typeLabel.textContent =
+            fragment.type;
+    }
+
+    if (compatLabel) {
+        compatLabel.textContent =
+            Number(
+                fragment.compatibility
+            ).toFixed(2);
+    }
+
+    if (stateLabelNode) {
+        stateLabelNode.textContent =
+            stateLabel;
+    }
+
+    if (hashLabel) {
+        hashLabel.textContent =
+            fragment.hashStatus;
+    }
+
+    if (reasoning) {
+        reasoning.textContent =
+            fragment.reasoning;
+    }
+
+
+    document
+        .querySelectorAll(
+            ".fragment-node"
+        )
+        .forEach((node) => {
+
+            const circle =
+                node.querySelector(
+                    "circle"
+                );
+
+            if (!circle) return;
+
+            const selected =
+                node.dataset.fragmentId ===
+                fragmentId;
+
+            circle.setAttribute(
+                "stroke-width",
+                selected ? "4" : "2.5"
+            );
+
+            circle.setAttribute(
+                "r",
+                selected ? "21" : "18"
+            );
+
+            node.setAttribute(
+                "aria-selected",
+                selected
+                    ? "true"
+                    : "false"
+            );
+        });
 }
+
+
+/* =========================================================
+   ARTIFACT MODAL
+========================================================= */
 
 function openArtifactModal(artifact) {
-    const modal = document.getElementById("artifactModal");
+
+    const modal =
+        document.getElementById(
+            "artifactModal"
+        );
+
     if (!modal) return;
 
-    const modalTitle = document.getElementById("artifactModalTitle");
-    const modalType = document.getElementById("modalArtifactType");
-    const modalRecovery = document.getElementById("modalArtifactRecovery");
-    const modalState = document.getElementById("modalArtifactState");
-    const modalIntegrityValue = document.getElementById("modalIntegrityValue");
-    const modalCorruptionValue = document.getElementById("modalCorruptionValue");
-    const integrityBar = document.getElementById("modalIntegrityBar");
-    const corruptionBar = document.getElementById("modalCorruptionBar");
-    const aiExplanation = document.getElementById("modalAiExplanation");
-    const explainabilityList = document.getElementById("explainabilityList");
+    const modalTitle =
+        document.getElementById(
+            "artifactModalTitle"
+        );
 
-    if (modalTitle) modalTitle.textContent = artifact.name;
-    if (modalType) modalType.textContent = artifact.type;
-    if (modalRecovery) modalRecovery.textContent = `${artifact.recovery}%`;
-    if (modalState) modalState.textContent = artifact.state;
-    if (modalIntegrityValue) modalIntegrityValue.textContent = `${artifact.integrity}%`;
-    if (modalCorruptionValue) modalCorruptionValue.textContent = `${artifact.corruption}%`;
-    if (integrityBar) integrityBar.style.width = `${artifact.integrity}%`;
-    if (corruptionBar) corruptionBar.style.width = `${artifact.corruption}%`;
-    if (aiExplanation) aiExplanation.textContent = artifact.explanation;
+    const modalType =
+        document.getElementById(
+            "modalArtifactType"
+        );
+
+    const modalRecovery =
+        document.getElementById(
+            "modalArtifactRecovery"
+        );
+
+    const modalState =
+        document.getElementById(
+            "modalArtifactState"
+        );
+
+    const modalIntegrityValue =
+        document.getElementById(
+            "modalIntegrityValue"
+        );
+
+    const modalCorruptionValue =
+        document.getElementById(
+            "modalCorruptionValue"
+        );
+
+    const integrityBar =
+        document.getElementById(
+            "modalIntegrityBar"
+        );
+
+    const corruptionBar =
+        document.getElementById(
+            "modalCorruptionBar"
+        );
+
+    const aiExplanation =
+        document.getElementById(
+            "modalAiExplanation"
+        );
+
+    const explainabilityList =
+        document.getElementById(
+            "explainabilityList"
+        );
+
+
+    if (modalTitle) {
+        modalTitle.textContent =
+            artifact.name;
+    }
+
+    if (modalType) {
+        modalType.textContent =
+            artifact.type;
+    }
+
+    if (modalRecovery) {
+        modalRecovery.textContent =
+            `${artifact.recovery}%`;
+    }
+
+    if (modalState) {
+        modalState.textContent =
+            artifact.state;
+    }
+
+    if (modalIntegrityValue) {
+        modalIntegrityValue.textContent =
+            `${artifact.integrity}%`;
+    }
+
+    if (modalCorruptionValue) {
+        modalCorruptionValue.textContent =
+            `${artifact.corruption}%`;
+    }
+
+    if (integrityBar) {
+        integrityBar.style.width =
+            `${percentage(artifact.integrity)}%`;
+    }
+
+    if (corruptionBar) {
+        corruptionBar.style.width =
+            `${percentage(artifact.corruption)}%`;
+    }
+
+    if (aiExplanation) {
+        aiExplanation.textContent =
+            artifact.explanation;
+    }
 
     if (explainabilityList) {
-        explainabilityList.innerHTML = (artifact.explainability || [])
-            .map((item) => `<li>${item}</li>`)
-            .join("");
+
+        explainabilityList.innerHTML =
+            (artifact.explainability || [])
+                .map(
+                    (item) =>
+                        `<li>${escapeHtml(item)}</li>`
+                )
+                .join("");
     }
 
-    modal.classList.add("is-open");
-    modal.setAttribute("aria-hidden", "false");
+
+    modal.classList.add(
+        "is-open"
+    );
+
+    modal.setAttribute(
+        "aria-hidden",
+        "false"
+    );
 }
+
 
 function closeArtifactModal() {
-    const modal = document.getElementById("artifactModal");
+
+    const modal =
+        document.getElementById(
+            "artifactModal"
+        );
+
     if (!modal) return;
-    modal.classList.remove("is-open");
-    modal.setAttribute("aria-hidden", "true");
+
+    modal.classList.remove(
+        "is-open"
+    );
+
+    modal.setAttribute(
+        "aria-hidden",
+        "true"
+    );
 }
+
+
+/* =========================================================
+   EXPORT REPORT
+========================================================= */
 
 function exportEvidenceReport() {
+
     const payload = {
-        generatedAt: new Date().toISOString(),
-        mode: state.mode,
-        case: state.case,
-        stats: state.stats,
-        artifacts: state.artifacts,
-        fragments: state.fragments,
-        timeline: state.timeline,
-        audit: state.audit
+
+        generatedAt:
+            new Date().toISOString(),
+
+        mode:
+            state.mode,
+
+        case:
+            state.case,
+
+        stats:
+            state.stats,
+
+        artifacts:
+            state.artifacts,
+
+        fragments:
+            state.fragments,
+
+        timeline:
+            state.timeline,
+
+        audit:
+            state.audit,
+
+        backendResponse:
+            state.rawResponse
     };
 
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
+
+    const blob =
+        new Blob(
+            [
+                JSON.stringify(
+                    payload,
+                    null,
+                    2
+                )
+            ],
+            {
+                type:
+                    "application/json"
+            }
+        );
+
+    const url =
+        URL.createObjectURL(
+            blob
+        );
+
+    const link =
+        document.createElement(
+            "a"
+        );
+
     link.href = url;
-    link.download = "anvaya-evidence-report.json";
+
+    link.download =
+        "anvaya-evidence-report.json";
+
     link.click();
-    URL.revokeObjectURL(url);
+
+    URL.revokeObjectURL(
+        url
+    );
 }
+
+
+/* =========================================================
+   FILE UPLOAD UI
+========================================================= */
+
+function setupEvidenceUpload() {
+
+    const fileInput =
+        document.getElementById(
+            "evidenceFile"
+        );
+
+    const fileName =
+        document.getElementById(
+            "selectedFileName"
+        );
+
+    const analyzeButton =
+        document.getElementById(
+            "analyzeEvidenceBtn"
+        );
+
+    const uploadStatus =
+        document.getElementById(
+            "uploadStatus"
+        );
+
+    if (
+        !fileInput ||
+        !analyzeButton
+    ) {
+        return;
+    }
+
+
+    fileInput.addEventListener(
+        "change",
+        () => {
+
+            const file =
+                fileInput.files?.[0];
+
+            if (!file) {
+
+                if (fileName) {
+                    fileName.textContent =
+                        "No file selected";
+                }
+
+                return;
+            }
+
+            if (fileName) {
+                fileName.textContent =
+                    `${file.name} (${formatBytes(file.size)})`;
+            }
+
+            if (uploadStatus) {
+                uploadStatus.textContent =
+                    "File selected. Click Analyze Evidence.";
+            }
+        }
+    );
+
+
+    analyzeButton.addEventListener(
+        "click",
+        async () => {
+
+            const file =
+                fileInput.files?.[0];
+
+            if (!file) {
+
+                if (uploadStatus) {
+                    uploadStatus.textContent =
+                        "Please select an evidence file first.";
+                }
+
+                return;
+            }
+
+
+            analyzeButton.disabled =
+                true;
+
+            analyzeButton.textContent =
+                "Analyzing...";
+
+
+            if (uploadStatus) {
+                uploadStatus.textContent =
+                    "Uploading evidence and running forensic analysis...";
+            }
+
+
+            try {
+
+                const response =
+                    await analyzeEvidenceFile(
+                        file
+                    );
+
+                const normalized =
+                    normalizeBackendResponse(
+                        response
+                    );
+
+                state.mode =
+                    "live";
+
+                state.case =
+                    normalized.caseInfo;
+
+                state.stats =
+                    normalized.stats;
+
+                state.artifacts =
+                    normalized.artifacts;
+
+                state.fragments =
+                    normalized.fragments;
+
+                state.timeline =
+                    normalized.timeline;
+
+                state.audit =
+                    normalized.audit;
+
+                state.rawResponse =
+                    normalized.raw;
+
+
+                renderModeIndicator();
+
+                renderCase();
+
+                renderAudit();
+
+                renderStats(
+                    state.stats
+                );
+
+                renderArtifactTable(
+                    state.artifacts
+                );
+
+                renderTimeline(
+                    state.timeline
+                );
+
+                renderFragmentGraph(
+                    state.fragments
+                );
+
+
+                if (
+                    state.fragments.length
+                ) {
+
+                    updateFragmentDetails(
+                        state.fragments[0].id
+                    );
+                }
+
+
+                if (uploadStatus) {
+
+                    uploadStatus.textContent =
+                        "Analysis completed successfully. Live backend data is displayed.";
+                }
+
+                window.location.hash =
+                    "overview";
+
+            } catch (error) {
+
+                console.error(
+                    "Evidence analysis failed:",
+                    error
+                );
+
+                state.mode =
+                    "demo";
+
+                const mock =
+                    normalizeBackendResponse(
+                        mockResponse()
+                    );
+
+                state.case =
+                    mock.caseInfo;
+
+                state.stats =
+                    mock.stats;
+
+                state.artifacts =
+                    mock.artifacts;
+
+                state.fragments =
+                    mock.fragments;
+
+                state.timeline =
+                    mock.timeline;
+
+                state.audit =
+                    mock.audit;
+
+                state.rawResponse =
+                    mock.raw;
+
+
+                renderModeIndicator();
+
+                renderCase();
+
+                renderAudit();
+
+                renderStats(
+                    state.stats
+                );
+
+                renderArtifactTable(
+                    state.artifacts
+                );
+
+                renderTimeline(
+                    state.timeline
+                );
+
+                renderFragmentGraph(
+                    state.fragments
+                );
+
+
+                if (uploadStatus) {
+
+                    uploadStatus.textContent =
+                        `Backend analysis failed: ${error.message}`;
+                }
+
+            } finally {
+
+                analyzeButton.disabled =
+                    false;
+
+                analyzeButton.textContent =
+                    "Analyze Evidence";
+            }
+        }
+    );
+}
+
+
+/* =========================================================
+   SECTION NAVIGATION
+========================================================= */
 
 function setupSectionNavigation() {
-    const links = [...document.querySelectorAll(".section-nav a")];
-    const sections = links
-        .map((link) => document.querySelector(link.getAttribute("href")))
-        .filter(Boolean);
 
-    if (!links.length || !sections.length || !("IntersectionObserver" in window)) return;
+    const links =
+        [
+            ...document.querySelectorAll(
+                ".section-nav a"
+            )
+        ];
 
-    const updateActiveLink = (sectionId) => {
-        links.forEach((link) => {
-            const active = link.getAttribute("href") === `#${sectionId}`;
-            link.classList.toggle("active", active);
-            if (active) link.setAttribute("aria-current", "location");
-            else link.removeAttribute("aria-current");
-        });
-    };
+    const sections =
+        links
+            .map(
+                (link) =>
+                    document.querySelector(
+                        link.getAttribute(
+                            "href"
+                        )
+                    )
+            )
+            .filter(Boolean);
 
-    const observer = new IntersectionObserver((entries) => {
-        const visible = entries
-            .filter((entry) => entry.isIntersecting)
-            .sort((first, second) => second.intersectionRatio - first.intersectionRatio)[0];
 
-        if (visible) updateActiveLink(visible.target.id);
-    }, { rootMargin: "-76px 0px -55% 0px", threshold: [0.15, 0.4, 0.7] });
-
-    sections.forEach((section) => observer.observe(section));
-}
-
-async function initializeDashboard() {
-    apiRequestFailed = false;
-    renderModeIndicator();
-
-    try {
-        const [caseResponse, artifactsResponse, fragmentsResponse, timelineResponse, auditResponse] = await Promise.all([
-            fetchCaseData(),
-            fetchArtifacts(),
-            fetchFragments(),
-            fetchTimeline(),
-            fetchAuditData()
-        ]);
-
-        if (apiRequestFailed) {
-            throw new Error("One or more backend requests failed");
-        }
-
-        state.mode = "live";
-        state.case = normalizeCase(caseResponse);
-        state.stats = state.case.stats;
-        state.artifacts = (Array.isArray(artifactsResponse) ? artifactsResponse : artifactsResponse?.artifacts || []).map(normalizeArtifact);
-        state.fragments = (Array.isArray(fragmentsResponse) ? fragmentsResponse : fragmentsResponse?.fragments || []).map(normalizeFragment);
-        state.timeline = (Array.isArray(timelineResponse) ? timelineResponse : timelineResponse?.timeline || []).map(normalizeTimeline);
-        state.audit = normalizeAudit(auditResponse);
-    } catch (error) {
-        console.warn("FastAPI unavailable; loading demonstration dataset.", error);
-        state.mode = "demo";
-        state.case = normalizeCase(mockCaseResponse());
-        state.stats = state.case.stats;
-        state.artifacts = MOCK_DATA.artifacts.map(normalizeArtifact);
-        state.fragments = MOCK_DATA.fragments.map(normalizeFragment);
-        state.timeline = MOCK_DATA.timeline.map(normalizeTimeline);
-        state.audit = normalizeAudit(mockAuditResponse());
+    if (
+        !links.length ||
+        !sections.length ||
+        !(
+            "IntersectionObserver"
+            in window
+        )
+    ) {
+        return;
     }
 
+
+    const updateActiveLink =
+        (sectionId) => {
+
+            links.forEach(
+                (link) => {
+
+                    const active =
+                        link.getAttribute(
+                            "href"
+                        ) ===
+                        `#${sectionId}`;
+
+                    link.classList.toggle(
+                        "active",
+                        active
+                    );
+
+                    if (active) {
+
+                        link.setAttribute(
+                            "aria-current",
+                            "location"
+                        );
+
+                    } else {
+
+                        link.removeAttribute(
+                            "aria-current"
+                        );
+                    }
+                }
+            );
+        };
+
+
+    const observer =
+        new IntersectionObserver(
+            (entries) => {
+
+                const visible =
+                    entries
+                        .filter(
+                            (entry) =>
+                                entry.isIntersecting
+                        )
+                        .sort(
+                            (first, second) =>
+                                second.intersectionRatio -
+                                first.intersectionRatio
+                        )[0];
+
+                if (visible) {
+
+                    updateActiveLink(
+                        visible.target.id
+                    );
+                }
+            },
+            {
+                rootMargin:
+                    "-76px 0px -55% 0px",
+
+                threshold: [
+                    0.15,
+                    0.4,
+                    0.7
+                ]
+            }
+        );
+
+
+    sections.forEach(
+        (section) =>
+            observer.observe(section)
+    );
+}
+
+
+/* =========================================================
+   UTILITIES
+========================================================= */
+
+function formatBytes(bytes) {
+
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+        return "0 B";
+    }
+
+    const units = [
+        "B",
+        "KB",
+        "MB",
+        "GB"
+    ];
+
+    const index =
+        Math.floor(
+            Math.log(bytes) /
+            Math.log(1024)
+        );
+
+    const safeIndex =
+        Math.min(
+            index,
+            units.length - 1
+        );
+
+    return `${(
+        bytes /
+        Math.pow(
+            1024,
+            safeIndex
+        )
+    ).toFixed(
+        safeIndex === 0
+            ? 0
+            : 2
+    )} ${units[safeIndex]}`;
+}
+
+
+function escapeHtml(value) {
+
+    return String(
+        value ?? ""
+    )
+        .replaceAll(
+            "&",
+            "&amp;"
+        )
+        .replaceAll(
+            "<",
+            "&lt;"
+        )
+        .replaceAll(
+            ">",
+            "&gt;"
+        )
+        .replaceAll(
+            '"',
+            "&quot;"
+        )
+        .replaceAll(
+            "'",
+            "&#039;"
+        );
+}
+
+
+/* =========================================================
+   INITIALIZE
+========================================================= */
+
+function loadDemoDashboard() {
+
+    const normalized =
+        normalizeBackendResponse(
+            mockResponse()
+        );
+
+    state.mode =
+        "demo";
+
+    state.case =
+        normalized.caseInfo;
+
+    state.stats =
+        normalized.stats;
+
+    state.artifacts =
+        normalized.artifacts;
+
+    state.fragments =
+        normalized.fragments;
+
+    state.timeline =
+        normalized.timeline;
+
+    state.audit =
+        normalized.audit;
+
+    state.rawResponse =
+        normalized.raw;
+
+
     renderModeIndicator();
+
     renderCase();
+
     renderAudit();
-    renderStats(state.stats);
-    renderArtifactTable(state.artifacts);
-    renderTimeline(state.timeline);
-    renderFragmentGraph(state.fragments);
-    updateFragmentDetails(state.fragments.find((fragment) => fragment.id === "F007")?.id || state.fragments[0]?.id || "F007");
+
+    renderStats(
+        state.stats
+    );
+
+    renderArtifactTable(
+        state.artifacts
+    );
+
+    renderTimeline(
+        state.timeline
+    );
+
+    renderFragmentGraph(
+        state.fragments
+    );
+
+    if (state.fragments.length) {
+
+        updateFragmentDetails(
+            state.fragments[0].id
+        );
+    }
+}
+
+
+function setupModal() {
+
+    const modal =
+        document.getElementById(
+            "artifactModal"
+        );
+
+    const closeBtn =
+        document.getElementById(
+            "closeArtifactModal"
+        );
+
+
+    if (closeBtn) {
+
+        closeBtn.addEventListener(
+            "click",
+            closeArtifactModal
+        );
+    }
+
+
+    if (modal) {
+
+        modal.addEventListener(
+            "click",
+            (event) => {
+
+                if (
+                    event.target ===
+                    modal
+                ) {
+                    closeArtifactModal();
+                }
+            }
+        );
+    }
+}
+
+
+function initializeDashboard() {
+
+    apiRequestFailed = false;
+
+    loadDemoDashboard();
+
+    setupEvidenceUpload();
+
     setupSectionNavigation();
 
-    const exportBtn = document.getElementById("exportReportBtn");
-    if (exportBtn) exportBtn.addEventListener("click", exportEvidenceReport);
+    setupModal();
 
-    const modal = document.getElementById("artifactModal");
-    const closeBtn = document.getElementById("closeArtifactModal");
 
-    if (closeBtn) closeBtn.addEventListener("click", closeArtifactModal);
-    if (modal) {
-        modal.addEventListener("click", (event) => {
-            if (event.target === modal) closeArtifactModal();
-        });
+    const exportBtn =
+        document.getElementById(
+            "exportReportBtn"
+        );
+
+    if (exportBtn) {
+
+        exportBtn.addEventListener(
+            "click",
+            exportEvidenceReport
+        );
     }
 }
 
-document.addEventListener("DOMContentLoaded", initializeDashboard);
+
+document.addEventListener(
+    "DOMContentLoaded",
+    initializeDashboard
+);

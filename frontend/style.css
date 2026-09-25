@@ -2192,3 +2192,189 @@ body {
         padding-right: 20px;
     }
 }
+/* =========================================================
+   ANVAYA UI FIXES
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   EVIDENCE UPLOAD BUTTON
+   Make the native "Choose File" button match
+   the "Analyze Evidence" button.
+   --------------------------------------------------------- */
+
+input[type="file"]::file-selector-button {
+    background: #3b9df8;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin-right: 12px;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        background-color 0.2s ease,
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+input[type="file"]::file-selector-button:hover {
+    background: #2688e6;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(59, 157, 248, 0.25);
+}
+
+input[type="file"]::file-selector-button:active {
+    transform: translateY(0);
+}
+
+
+/* Chrome / Edge compatibility */
+input[type="file"]::-webkit-file-upload-button {
+    background: #3b9df8;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin-right: 12px;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        background-color 0.2s ease,
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+input[type="file"]::-webkit-file-upload-button:hover {
+    background: #2688e6;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(59, 157, 248, 0.25);
+}
+
+
+/* ---------------------------------------------------------
+   EVIDENCE CLASSIFICATION
+   FIX RECOVERED CARD
+   --------------------------------------------------------- */
+
+/* Recovered card background */
+.status-card.recovered {
+    background: #11161f !important;
+    color: #f5f7fa !important;
+    border-color: #35e6a5 !important;
+}
+
+/* Recovered heading */
+.status-card.recovered h4 {
+    color: #f5f7fa !important;
+}
+
+/* Recovered description */
+.status-card.recovered p {
+    color: #aeb8c6 !important;
+}
+
+/* Recovered green dot */
+.status-card.recovered .dot {
+    background: #35e6a5 !important;
+    box-shadow: 0 0 12px rgba(53, 230, 165, 0.45);
+}
+
+
+/* ---------------------------------------------------------
+   KEEP ALL THREE CLASSIFICATION CARDS CONSISTENT
+   --------------------------------------------------------- */
+
+.status-card.inferred {
+    background: #29281f !important;
+    color: #f5f7fa !important;
+}
+
+.status-card.inferred h4 {
+    color: #f5f7fa !important;
+}
+
+.status-card.inferred p {
+    color: #aeb8c6 !important;
+}
+
+.status-card.missing {
+    background: #2b172b !important;
+    color: #f5f7fa !important;
+}
+
+.status-card.missing h4 {
+    color: #f5f7fa !important;
+}
+
+.status-card.missing p {
+    color: #aeb8c6 !important;
+}
+
+
+/* ---------------------------------------------------------
+   CLASSIFICATION DOTS
+   --------------------------------------------------------- */
+
+.status-card.inferred .dot {
+    background: #ffd447 !important;
+    box-shadow: 0 0 12px rgba(255, 212, 71, 0.4);
+}
+
+.status-card.missing .dot {
+    background: #ff3db5 !important;
+    box-shadow: 0 0 12px rgba(255, 61, 181, 0.4);
+}
+
+
+/* ---------------------------------------------------------
+   BETTER FILE INPUT TEXT
+   --------------------------------------------------------- */
+
+input[type="file"] {
+    color: #c7d0dc;
+    font-family: inherit;
+    font-size: 15px;
+}
+
+
+/* ---------------------------------------------------------
+   ANALYZE BUTTON - KEEP SAME VISUAL LANGUAGE
+   --------------------------------------------------------- */
+
+#analyzeEvidenceBtn {
+    background: #3b9df8 !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 14px 24px !important;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        background-color 0.2s ease,
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+#analyzeEvidenceBtn:hover {
+    background: #2688e6 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(59, 157, 248, 0.25);
+}
+
+#analyzeEvidenceBtn:active {
+    transform: translateY(0);
+}
+
+#analyzeEvidenceBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
