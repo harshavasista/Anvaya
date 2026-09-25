@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Anvaya generated evidence and test data
+data/input/
+data/fragments/
+data/recovered_candidate.pdf
+
+# Anvaya generated results
+results/
+
+# Environment variables
+.env

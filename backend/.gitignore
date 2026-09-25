@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Generated evidence / test data
+data/input/
+data/fragments/
+data/recovered_candidate.pdf
+
+# Generated results
+results/
+
+# Environment variables
+.env
+
+# VS Code
+.vscode/
