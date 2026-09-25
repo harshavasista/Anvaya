@@ -39,36 +39,51 @@ def build_reconstruction_map(
     """
     Match surviving fragments to their original positions.
 
-    Each original position becomes:
-
-        RECOVERED
-        CORRUPTED
-        MISSING
+    Handles duplicate fragment hashes by keeping
+    all original positions for the same hash.
     """
 
     original_by_hash = {}
 
     for fragment in original_fragments:
+        fragment_hash = fragment["sha256"]
 
-        original_by_hash[
-            fragment["sha256"]
-        ] = fragment["original_index"]
+        if fragment_hash not in original_by_hash:
+            original_by_hash[fragment_hash] = []
+
+        original_by_hash[fragment_hash].append(
+            fragment["original_index"]
+        )
 
     reconstruction = []
 
     matched_indexes = set()
 
-    # First identify exact/intact fragments
+    # Match surviving fragments to original positions
     for damaged in damaged_fragments:
 
-        original_index = original_by_hash.get(
-            damaged["sha256"]
+        fragment_hash = damaged["sha256"]
+
+        possible_indexes = original_by_hash.get(
+            fragment_hash,
+            []
         )
 
-        if original_index is None:
+        # No matching original fragment
+        if not possible_indexes:
             continue
 
-        if original_index in matched_indexes:
+        # Find an original position that has not
+        # already been matched
+        original_index = None
+
+        for index in possible_indexes:
+            if index not in matched_indexes:
+                original_index = index
+                break
+
+        # Extra duplicate fragment
+        if original_index is None:
             continue
 
         matched_indexes.add(original_index)
@@ -101,8 +116,6 @@ def build_reconstruction_map(
     )
 
     return reconstruction
-
-
 def generate_candidate_file(
     reconstruction_map,
     damaged_fragments,

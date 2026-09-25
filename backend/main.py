@@ -6,6 +6,7 @@ import shutil
 from datetime import datetime
 
 from backend.reconstruction.fragment_analyzer import analyze_fragments
+from backend.evidence.evidence_analyzer import EvidenceAnalyzer
 
 from backend.integrity.integrity_analyzer import (
     scan_fragments,
@@ -485,6 +486,17 @@ async def complete_case_analysis(
             buffer
         )
 
+    evidence_analyzer = EvidenceAnalyzer(fragment_size=4096)
+    try:
+        evidence_analysis = evidence_analyzer.analyze(file_path)
+    except (OSError, RuntimeError) as exc:
+        # Keep the existing case analysis available if this additional
+        # evidence-only pass cannot read the saved upload.
+        evidence_analysis = {
+            "status": "unavailable",
+            "error": str(exc)
+        }
+
     with open(
         file_path,
         "rb"
@@ -546,6 +558,14 @@ async def complete_case_analysis(
                 "sha256": sha256_hash,
                 "size_bytes": len(contents)
             }
+        )
+    )
+
+    audit_events.append(
+        create_audit_event(
+            event="EVIDENCE_ANALYSIS",
+            description="Evidence metadata, fragment hashes, duplicate detection, and recovery analysis completed.",
+            metadata=evidence_analysis
         )
     )
 
@@ -783,6 +803,9 @@ async def complete_case_analysis(
                 sha256_hash
 
         },
+
+        "evidence_analysis":
+            evidence_analysis,
 
         "fragment_analysis": {
 

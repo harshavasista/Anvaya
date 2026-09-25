@@ -89,10 +89,14 @@ def compare_fragments(
     original_by_hash = {}
 
     for fragment in original_fragments:
+        fragment_hash = fragment["sha256"]
 
-        original_by_hash[
-            fragment["sha256"]
-        ] = fragment["original_index"]
+        if fragment_hash not in original_by_hash:
+            original_by_hash[fragment_hash] = []
+
+        original_by_hash[fragment_hash].append(
+            fragment["original_index"]
+        )
 
     # -------------------------------------------------
     # Track original fragments already identified
@@ -110,18 +114,26 @@ def compare_fragments(
 
     for damaged in damaged_fragments:
 
-        original_index = original_by_hash.get(
+        possible_indexes = original_by_hash.get(
             damaged["sha256"]
         )
 
-        if original_index is None:
+        if not possible_indexes:
             continue
 
-        # IMPORTANT:
-        # If another physical file has the same hash,
-        # it is a duplicate and must not be counted
-        # as another original fragment.
-        if original_index in matched_original_indexes:
+        # Assign this physical fragment to one original position
+        # that has not already been matched.
+        original_index = next(
+            (
+                index
+                for index in possible_indexes
+                if index not in matched_original_indexes
+            ),
+            None
+        )
+
+        # Extra physical copies do not represent new originals.
+        if original_index is None:
             continue
 
         matched_original_indexes.add(
