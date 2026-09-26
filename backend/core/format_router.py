@@ -41,14 +41,15 @@ def detect_format(data: bytes, filename: str = "") -> Dict[str, Any]:
     """
     ext = Path(filename).suffix.lower() if filename else ""
 
-    # 1. PDF
-    if data.startswith(b"%PDF") or (len(data) > 10 and b"%PDF-" in data[:1024]):
+    # 1. PDF: trust the extension when damage has destroyed the signature.
+    has_pdf_signature = data.startswith(b"%PDF") or (len(data) > 10 and b"%PDF-" in data[:1024])
+    if ext == ".pdf" or has_pdf_signature:
         return {
             "file_type": "PDF",
             "mime_type": MIME_MAP["PDF"],
             "extension": ext or ".pdf",
-            "detected_by": "magic_bytes",
-            "parseable": True
+            "detected_by": "magic_bytes" if has_pdf_signature else "extension",
+            "parseable": has_pdf_signature
         }
 
     # 2. PNG

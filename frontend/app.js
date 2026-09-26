@@ -374,19 +374,20 @@
                 restoredSection.classList.add('hidden');
             } else {
                 restoredSection.classList.remove('hidden');
-                candidateValidationBadge.textContent = 'UNRECOVERABLE';
+                candidateValidationBadge.textContent = data.recovery.status || 'UNRECOVERABLE';
                 candidateValidationBadge.className = 'status-badge badge-corrupted';
-                candidateValidationText.textContent = 'RESTORE NOT SAFE / UNRECOVERABLE';
+                candidateValidationText.textContent = data.recovery.status === 'UNRECOVERABLE'
+                    ? 'NATIVE RECOVERY UNAVAILABLE'
+                    : data.recovery.status;
                 candidateSha256.textContent = 'No verified candidate generated';
                 restoredContainer.innerHTML = `
                     <div class="preview-placeholder">
-                        <p style="font-weight:600;color:var(--color-red);">Forensic Safe Recovery Alert</p>
-                        <p style="margin-top:6px;max-width:500px;">
-                            Structural damage exists, but no independent recovery reference was available.
-                            A complete reconstruction could not be safely produced without fabricating missing bytes.
-                        </p>
+                        <p style="font-weight:600;color:var(--color-red);">Native Recovery Status</p>
+                        <p class="recovery-detail" style="margin-top:6px;max-width:500px;"></p>
                     </div>
                 `;
+                restoredContainer.querySelector('.recovery-detail').textContent =
+                    (data.recovery.messages || []).join(' ') || 'Native recovery did not produce a candidate.';
             }
         }
 

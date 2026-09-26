@@ -1,35 +1,19 @@
 """
 Unified Recovery Orchestrator for ANVAYA.
 Per Section 14, 15, 16:
-- Supports Mode A (format-native repair) and Mode B (evidence-backed reconstruction)
-- Resolves seeded demo manifest for registered damaged SHA-256 hashes
-- If no reference matches, NEVER fabricates one
+- Runs format-native recovery against the submitted evidence
+- Does not require a reference file
 - Validates every generated candidate independently
 - Produces canonical recovery result
 """
 
 import os
-import json
 import hashlib
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 
 from backend.recovery.pdf_repairer import repair_pdf
 from backend.recovery.json_repairer import repair_json
 from backend.recovery.text_repairer import repair_text
-
-MANIFEST_PATH = os.path.join("data", "demo", "manifest.json")
-
-
-def load_demo_manifest() -> Dict[str, Any]:
-    """Load seeded demo manifest mapping damaged SHA-256 to known reference files."""
-    if os.path.exists(MANIFEST_PATH):
-        try:
-            with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
 
 def orchestrate_recovery(
     case_id: str,
@@ -43,23 +27,6 @@ def orchestrate_recovery(
     """
     Execute forensic recovery pipeline adhering strictly to honesty rules.
     """
-    manifest = load_demo_manifest()
-    reference_match = manifest.get(evidence_sha256.lower())
-
-    reference_bytes: Optional[bytes] = None
-    reference_path: Optional[str] = None
-    reference_sha256: Optional[str] = None
-    reference_description: Optional[str] = None
-
-    if reference_match:
-        ref_file_rel = reference_match.get("reference_file")
-        if ref_file_rel and os.path.exists(ref_file_rel):
-            with open(ref_file_rel, "rb") as rf:
-                reference_bytes = rf.read()
-            reference_path = ref_file_rel
-            reference_sha256 = hashlib.sha256(reference_bytes).hexdigest()
-            reference_description = reference_match.get("description", "Seeded demo reference exhibit")
-
     # If evidence is healthy, recovery is not needed
     if corruption_status == "HEALTHY":
         return {
@@ -85,17 +52,17 @@ def orchestrate_recovery(
 
     # Tier 1 Formats
     if file_type == "PDF":
-        candidate_bytes, details = repair_pdf(evidence_bytes, reference_bytes)
+        candidate_bytes, details = repair_pdf(evidence_bytes)
     elif file_type == "JSON":
-        candidate_bytes, details = repair_json(evidence_bytes, reference_bytes)
+        candidate_bytes, details = repair_json(evidence_bytes)
     elif file_type == "TXT":
-        candidate_bytes, details = repair_text(evidence_bytes, reference_bytes)
+        candidate_bytes, details = repair_text(evidence_bytes)
     else:
         # Tier 2 / 3 Formats
         details = {
             "methods": ["ANALYSIS_ONLY"],
             "messages": [
-                f"Automated recovery for format '{file_type}' is not supported or not safe without verified independent block references."
+                f"Native recovery is not available for format '{file_type}'."
             ],
             "validation": {
                 "status": "UNRESOLVED",
@@ -120,7 +87,7 @@ def orchestrate_recovery(
 
         recovered_sha256 = hashlib.sha256(candidate_bytes).hexdigest()
         candidate_url = f"/api/case/{case_id}/recovered"
-        status = "RECOVERED" if reference_match else "REPAIRED"
+        status = "REPAIRED"
     elif candidate_bytes:
         status = "PARTIALLY_RECOVERED"
     else:
@@ -151,11 +118,11 @@ def orchestrate_recovery(
         "recovered_fragments": recovered_frags,
         "missing_fragments": missing_frags,
         "unresolved_fragments": unresolved_frags,
-        "reference_matched": reference_match is not None,
-        "reference_url": f"/api/case/{case_id}/reference" if reference_match else None,
-        "reference_sha256": reference_sha256,
-        "reference_description": reference_description,
-        "reference_path": reference_path,
+        "reference_matched": False,
+        "reference_url": None,
+        "reference_sha256": None,
+        "reference_description": None,
+        "reference_path": None,
         "candidate_path": candidate_path,
         "candidate_bytes": candidate_bytes,
         "validation": details.get("validation", {}),

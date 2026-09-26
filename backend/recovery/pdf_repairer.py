@@ -15,58 +15,52 @@ import pymupdf
 
 
 def _repair_pdf_worker(damaged_data: bytes, reference_data: Optional[bytes] = None) -> Tuple[Optional[bytes], Dict[str, Any]]:
-    """Worker performing PDF repair and candidate generation."""
+    """Worker performing PDF repair and candidate generation.
+
+    Mode A (format-native repair) runs unconditionally on the uploaded file.
+    Mode B (evidence-backed reconstruction) is an optional enhancement only
+    when a verified reference file exists — it NEVER gates whether Mode A runs.
+    """
     methods_used = []
     messages = []
     candidate_bytes = None
 
-    # Strategy 1: Evidence-backed reconstruction (Mode B)
-    if reference_data:
-        try:
-            # Check reference validity first
-            ref_doc = pymupdf.open(stream=reference_data, filetype="pdf")
-            if ref_doc.page_count > 0:
-                methods_used.append("EVIDENCE_BACKED_RECONSTRUCTION")
-                messages.append("Genuine reference evidence utilized to restore corrupted byte segments.")
-                # Reconstruct candidate using verified reference stream
-                candidate_bytes = reference_data
-                ref_doc.close()
-        except Exception as e:
-            messages.append(f"Reference validation warning: {str(e)}")
+    # -------------------------------------------------------------------------
+    # Mode A — Format-native repair (runs ALWAYS, no reference required)
+    # -------------------------------------------------------------------------
+    methods_used.append("FORMAT_NATIVE_REPAIR")
+    repaired_stream = bytearray(damaged_data)
 
-    # Strategy 2: Format-native repair (Mode A)
-    if candidate_bytes is None:
-        methods_used.append("FORMAT_NATIVE_REPAIR")
-        repaired_stream = bytearray(damaged_data)
+    # A1. Prepend header if missing
+    if not repaired_stream.startswith(b"%PDF"):
+        repaired_stream = bytearray(b"%PDF-1.7\n") + repaired_stream
+        messages.append("Synthesized standard %PDF-1.7 header at offset 0.")
 
-        # 2a. Prepend header if missing
-        if not repaired_stream.startswith(b"%PDF"):
-            repaired_stream = bytearray(b"%PDF-1.7\n") + repaired_stream
-            messages.append("Synthesized standard %PDF-1.7 header at offset 0.")
+    # A2. Append %%EOF if missing
+    if b"%%EOF" not in repaired_stream[-512:]:
+        repaired_stream.extend(b"\n%%EOF\n")
+        messages.append("Appended standard %%EOF marker to trailer.")
 
-        # 2b. Append EOF if missing
-        if b"%%EOF" not in repaired_stream[-512:]:
-            repaired_stream.extend(b"\n%%EOF\n")
-            messages.append("Appended standard %%EOF marker to trailer.")
+    # A3. Open in PyMuPDF — it will auto-rebuild the xref table
+    try:
+        doc = pymupdf.open(stream=bytes(repaired_stream), filetype="pdf")
+        page_count = doc.page_count          # capture BEFORE close()
+        if page_count > 0:
+            clean_bytes = doc.tobytes(garbage=4, deflate=True, clean=True)
+            doc.close()
+            candidate_bytes = clean_bytes
+            messages.append(f"PyMuPDF normalized structure and salvaged {page_count} page(s).")
+        else:
+            doc.close()
+            messages.append("PyMuPDF opened the file but found 0 pages.")
+    except Exception as err:
+        messages.append(f"Native structural parse attempt failed: {str(err)}")
 
-        # 2c. Open in PyMuPDF with xref reconstruction
-        try:
-            doc = pymupdf.open(stream=bytes(repaired_stream), filetype="pdf")
-            if doc.page_count > 0:
-                # Re-save normalized clean PDF
-                clean_bytes = doc.tobytes(garbage=4, deflate=True, clean=True)
-                doc.close()
-                candidate_bytes = clean_bytes
-                messages.append(f"PyMuPDF successfully normalized structure and salvaged {doc.page_count} page(s).")
-            else:
-                doc.close()
-        except Exception as err:
-            messages.append(f"Native structural parse attempt failed: {str(err)}")
-
-    # Strategy 3: Stream and text salvage into new PDF container if damaged
+    # -------------------------------------------------------------------------
+    # Mode A fallback — Stream/text salvage into new PDF container
+    # -------------------------------------------------------------------------
     if candidate_bytes is None:
         try:
-            # Attempt to salvage any readable text into reconstructed evidence PDF
             text_chunks = []
             for chunk in damaged_data.split(b"\n"):
                 if b"stream" not in chunk and b"endstream" not in chunk:
@@ -90,6 +84,26 @@ def _repair_pdf_worker(damaged_data: bytes, reference_data: Optional[bytes] = No
                 messages.append("Salvaged readable text streams into reconstructed candidate PDF container.")
         except Exception as se:
             messages.append(f"Stream salvage failed: {str(se)}")
+
+    # -------------------------------------------------------------------------
+    # Mode B — Evidence-backed reconstruction (optional enhancement)
+    # Only runs if a verified reference file was supplied AND Mode A failed.
+    # It NEVER overrides a successfully repaired Mode A candidate.
+    # -------------------------------------------------------------------------
+    if candidate_bytes is None and reference_data:
+        try:
+            ref_doc = pymupdf.open(stream=reference_data, filetype="pdf")
+            ref_page_count = ref_doc.page_count
+            if ref_page_count > 0:
+                ref_bytes = ref_doc.tobytes(garbage=4, deflate=True, clean=True)
+                ref_doc.close()
+                candidate_bytes = ref_bytes
+                methods_used.append("EVIDENCE_BACKED_RECONSTRUCTION")
+                messages.append("All native repair strategies exhausted. Genuine reference evidence used as reconstruction source.")
+            else:
+                ref_doc.close()
+        except Exception as e:
+            messages.append(f"Reference validation warning: {str(e)}")
 
     # VALIDATION of candidate
     validation = {
