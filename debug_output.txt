@@ -1,0 +1,148 @@
+async function analyzeEvidenceFile(file) {
+
+    if (!file) {
+        throw new Error(
+            "No evidence file selected."
+        );
+    }
+
+    const controller =
+        new AbortController();
+
+    const timeoutId =
+        setTimeout(
+            () => controller.abort(),
+            API_CONFIG.timeout
+        );
+
+    try {
+
+        const formData =
+            new FormData();
+
+        formData.append(
+            "file",
+            file
+        );
+
+        console.log(
+            "Anvaya → uploading:",
+            file.name
+        );
+
+        const response =
+            await fetch(
+                endpointUrl(
+                    API_CONFIG.endpoints.analyze
+                ),
+                {
+                    method: "POST",
+                    body: formData,
+                    signal: controller.signal
+                }
+            );
+
+        if (!response.ok) {
+
+            const errorText =
+                await response.text();
+
+            throw new Error(
+                `Backend returned HTTP ${response.status}: ${errorText}`
+            );
+        }
+
+        return await response.json();
+
+    } catch (error) {
+
+        if (
+            error.name ===
+            "AbortError"
+        ) {
+
+            throw new Error(
+                "Analysis timed out after 120 seconds."
+            );
+        }
+
+        throw error;
+
+    } finally {
+
+        clearTimeout(
+            timeoutId
+        );
+    }
+}
+
+
+/* =========================================================
+   RESPONSE NORMALIZATION
+========================================================= */
+
+function normalizeBackendResponse(response) {
+
+    const caseData =
+        response?.case || {};
+
+    const evidence =
+        response?.evidence || {};
+
+    const fragmentAnalysis =
+        response?.fragment_analysis || {};
+
+    const formatValidation =
+        response?.format_validation || {};
+
+    const aiAnalysis =
+        response?.ai_analysis || {};
+
+    /*
+     IMPORTANT:
+     Do not declare evidenceIntegrity twice.
+    */
+    const integrityData =
+        response?.evidence_integrity || {};
+
+    const reconstruction =
+        response?.reconstruction || {};
+
+    const audit =
+        response?.audit || {};
+
+    const aiSummary =
+        aiAnalysis.summary || {};
+
+    const totalFragments =
+        Number(
+            fragmentAnalysis.total_fragments ||
+            0
+        );
+
+    const anomalyFragments =
+        Number(
+            aiSummary.fragments_analyzed ||
+            0
+        );
+
+
+    /* ---------------------------------------------------------
+       STANDALONE EVIDENCE INTEGRITY
+    --------------------------------------------------------- */
+
+    const integrityValue =
+        integrityData.evidence_integrity ??
+        "N/A";
+
+    const observedIntact =
+        Number(
+            integrityData.observed_intact ??
+            0
+        );
+
+    const suspectedAnomalous =
+        Number(
+            integrityData.suspected_anomalous ??
+            0
+     
