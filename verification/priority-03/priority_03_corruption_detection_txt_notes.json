@@ -1,0 +1,8 @@
+{
+  "scenario": "Priority_03_Corruption_Detection_TXT",
+  "file": "data/demo/corrupted_evidence.txt",
+  "timestamp": "2026-09-26T02:40:44.940Z",
+  "consoleErrors": [],
+  "failedRequests": [],
+  "success": true
+}

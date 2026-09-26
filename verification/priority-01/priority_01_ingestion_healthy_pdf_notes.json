@@ -1,0 +1,8 @@
+{
+  "scenario": "Priority_01_Ingestion_Healthy_PDF",
+  "file": "data/demo/clean_evidence.pdf",
+  "timestamp": "2026-09-26T02:40:33.978Z",
+  "consoleErrors": [],
+  "failedRequests": [],
+  "success": true
+}

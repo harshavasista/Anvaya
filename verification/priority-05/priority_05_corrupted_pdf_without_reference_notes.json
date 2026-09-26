@@ -1,0 +1,8 @@
+{
+  "scenario": "Priority_05_Corrupted_PDF_Without_Reference",
+  "file": "data/demo/untracked_corrupted.pdf",
+  "timestamp": "2026-09-26T02:40:52.472Z",
+  "consoleErrors": [],
+  "failedRequests": [],
+  "success": true
+}
